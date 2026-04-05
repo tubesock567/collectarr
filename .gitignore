@@ -1,11 +1,13 @@
 data/
 .env
+videos/
 node_modules/
 frontend/node_modules/
 frontend/build/
 frontend/.svelte-kit/
 frontend/.env
 backend/bin/
+backend/backend
 backend/.env
 *.db
 *.sqlite
