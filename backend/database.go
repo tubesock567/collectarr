@@ -1,0 +1,466 @@
+package main
+
+import (
+	"database/sql"
+	"errors"
+	"fmt"
+	"log/slog"
+	"os"
+	"path/filepath"
+	"strings"
+
+	_ "github.com/mattn/go-sqlite3"
+)
+
+const createVideosTableSQL = `
+CREATE TABLE IF NOT EXISTS videos (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	title TEXT NOT NULL,
+	filename TEXT NOT NULL UNIQUE,
+	path TEXT NOT NULL,
+	quality TEXT,
+	duration INTEGER,
+	date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
+	date_scanned DATETIME
+);`
+
+const createVideosTitleIndexSQL = `CREATE INDEX IF NOT EXISTS idx_videos_title ON videos(title);`
+
+const createUsersTableSQL = `
+CREATE TABLE IF NOT EXISTS users (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	username TEXT NOT NULL UNIQUE,
+	password_hash TEXT NOT NULL
+);`
+
+type Store struct {
+	db     *sql.DB
+	logger *slog.Logger
+}
+
+func NewStore(dbPath string, logger *slog.Logger) (*Store, error) {
+	if err := os.MkdirAll(filepath.Dir(dbPath), 0o755); err != nil {
+		return nil, fmt.Errorf("create database directory: %w", err)
+	}
+
+	db, err := sql.Open("sqlite3", dbPath)
+	if err != nil {
+		return nil, fmt.Errorf("open database: %w", err)
+	}
+
+	db.SetMaxOpenConns(1)
+	db.SetConnMaxLifetime(0)
+	db.SetMaxIdleConns(1)
+
+	store := &Store{db: db, logger: logger}
+	if err := store.Init(); err != nil {
+		_ = db.Close()
+		return nil, err
+	}
+
+	return store, nil
+}
+
+func (s *Store) Init() error {
+	if _, err := s.db.Exec(createVideosTableSQL); err != nil {
+		return fmt.Errorf("create videos table: %w", err)
+	}
+	if _, err := s.db.Exec(createVideosTitleIndexSQL); err != nil {
+		return fmt.Errorf("create videos title index: %w", err)
+	}
+	if _, err := s.db.Exec(createUsersTableSQL); err != nil {
+		return fmt.Errorf("create users table: %w", err)
+	}
+
+	hasTitle, err := s.hasVideosColumn("title")
+	if err != nil {
+		return err
+	}
+
+	if !hasTitle {
+		if _, err := s.db.Exec(`DROP TABLE IF EXISTS videos`); err != nil {
+			return fmt.Errorf("drop old videos table: %w", err)
+		}
+
+		if _, err := s.db.Exec(createVideosTableSQL); err != nil {
+			return fmt.Errorf("recreate videos table: %w", err)
+		}
+		if _, err := s.db.Exec(createVideosTitleIndexSQL); err != nil {
+			return fmt.Errorf("recreate videos title index: %w", err)
+		}
+
+		if s.logger != nil {
+			s.logger.Info("migrated videos table schema", "added_column", "title")
+		}
+	}
+
+	hasQuality, err := s.hasVideosColumn("quality")
+	if err != nil {
+		return err
+	}
+	if !hasQuality {
+		if _, err := s.db.Exec(`ALTER TABLE videos ADD COLUMN quality TEXT`); err != nil {
+			return fmt.Errorf("add quality column: %w", err)
+		}
+		if s.logger != nil {
+			s.logger.Info("migrated videos table schema", "added_column", "quality")
+		}
+	}
+
+	return nil
+}
+
+func (s *Store) GetUserByUsername(username string) (User, error) {
+	var user User
+	err := s.db.QueryRow(`SELECT id, username, password_hash FROM users WHERE username = ?`, username).Scan(&user.ID, &user.Username, &user.Password)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return User{}, err
+		}
+		return User{}, fmt.Errorf("get user by username: %w", err)
+	}
+
+	return user, nil
+}
+
+func (s *Store) UpdatePassword(username string, newHash string) error {
+	result, err := s.db.Exec(`UPDATE users SET password_hash = ? WHERE username = ?`, newHash, username)
+	if err != nil {
+		return fmt.Errorf("update password: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read updated rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+func (s *Store) CreateDefaultUser() error {
+	var count int
+	if err := s.db.QueryRow(`SELECT COUNT(*) FROM users`).Scan(&count); err != nil {
+		return fmt.Errorf("count users: %w", err)
+	}
+	if count > 0 {
+		return nil
+	}
+
+	hash, err := hashPassword("admin")
+	if err != nil {
+		return fmt.Errorf("hash default password: %w", err)
+	}
+
+	if _, err := s.db.Exec(`INSERT INTO users (username, password_hash) VALUES (?, ?)`, "admin", hash); err != nil {
+		return fmt.Errorf("create default user: %w", err)
+	}
+
+	if s.logger != nil {
+		s.logger.Info("created default user", "username", "admin")
+	}
+
+	return nil
+}
+
+func (s *Store) hasVideosColumn(name string) (bool, error) {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('videos') WHERE name = ?`, name).Scan(&count)
+	if err != nil {
+		return false, fmt.Errorf("check videos schema: %w", err)
+	}
+
+	return count > 0, nil
+}
+
+func (s *Store) Close() error {
+	return s.db.Close()
+}
+
+func (s *Store) ListVideos() ([]Video, error) {
+	rows, err := s.db.Query(`
+		SELECT id, title, filename, path, quality, duration, date_added, date_scanned
+		FROM videos
+		ORDER BY date_added DESC, id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("query videos: %w", err)
+	}
+	defer rows.Close()
+
+	var videos []Video
+	for rows.Next() {
+		video, err := scanVideoSummary(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan video summary: %w", err)
+		}
+		videos = append(videos, video)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate videos: %w", err)
+	}
+
+	return videos, nil
+}
+
+func (s *Store) GetVideoByID(id int64) (Video, error) {
+	row := s.db.QueryRow(`
+		SELECT id, title, filename, path, quality, duration, date_added, date_scanned
+		FROM videos
+		WHERE id = ?`, id)
+
+	video, err := scanVideoDetail(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Video{}, err
+		}
+		return Video{}, fmt.Errorf("get video by id: %w", err)
+	}
+
+	return video, nil
+}
+
+func (s *Store) GetVideoByPath(path string) (Video, error) {
+	row := s.db.QueryRow(`
+		SELECT id, title, filename, path, quality, duration, date_added, date_scanned
+		FROM videos
+		WHERE path = ?`, path)
+
+	video, err := scanVideoDetail(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Video{}, err
+		}
+		return Video{}, fmt.Errorf("get video by path: %w", err)
+	}
+
+	return video, nil
+}
+
+func (s *Store) InsertVideo(video ScannedVideo) error {
+	_, err := s.db.Exec(`
+		INSERT INTO videos (title, filename, path, quality, duration, date_scanned)
+		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+		video.Title, video.Filename, video.Path, video.Quality, video.Duration,
+	)
+	if err != nil {
+		return fmt.Errorf("insert video: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) UpdateVideoMetadata(id int64, video ScannedVideo) error {
+	_, err := s.db.Exec(`
+		UPDATE videos
+		SET title = ?, filename = ?, quality = ?, duration = ?, date_scanned = CURRENT_TIMESTAMP
+		WHERE id = ?`,
+		video.Title, video.Filename, video.Quality, video.Duration, id,
+	)
+	if err != nil {
+		return fmt.Errorf("update video metadata: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) IsUniqueFilenameError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "UNIQUE constraint failed: videos.filename")
+}
+
+func scanVideoSummary(scanner interface{ Scan(dest ...any) error }) (Video, error) {
+	var video Video
+	var dateAdded sql.NullTime
+	var dateScanned sql.NullTime
+	var quality sql.NullString
+
+	if err := scanner.Scan(&video.ID, &video.Title, &video.Filename, &video.Path, &quality, &video.Duration, &dateAdded, &dateScanned); err != nil {
+		return Video{}, err
+	}
+
+	if quality.Valid {
+		video.Quality = quality.String
+	}
+
+	assignVideoTimes(&video, dateAdded, dateScanned)
+	return video, nil
+}
+
+func scanVideoDetail(scanner interface{ Scan(dest ...any) error }) (Video, error) {
+	var video Video
+	var dateAdded sql.NullTime
+	var dateScanned sql.NullTime
+	var quality sql.NullString
+
+	if err := scanner.Scan(&video.ID, &video.Title, &video.Filename, &video.Path, &quality, &video.Duration, &dateAdded, &dateScanned); err != nil {
+		return Video{}, err
+	}
+
+	if quality.Valid {
+		video.Quality = quality.String
+	}
+
+	assignVideoTimes(&video, dateAdded, dateScanned)
+	return video, nil
+}
+
+func assignVideoTimes(video *Video, dateAdded, dateScanned sql.NullTime) {
+	if dateAdded.Valid {
+		t := dateAdded.Time.UTC()
+		video.DateAdded = &t
+	}
+	if dateScanned.Valid {
+		t := dateScanned.Time.UTC()
+		video.DateScanned = &t
+	}
+}
+
+func (s *Store) ListVideoGroups() ([]VideoGroup, error) {
+	rows, err := s.db.Query(`
+		SELECT id, title, filename, quality, duration, date_added, date_scanned
+		FROM videos
+		ORDER BY title,
+			CASE quality
+				WHEN '4K' THEN 1
+				WHEN '2160p' THEN 1
+				WHEN '1080p' THEN 2
+				WHEN '720p' THEN 3
+				WHEN '480p' THEN 4
+				ELSE 5
+			END,
+			id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("query videos: %w", err)
+	}
+	defer rows.Close()
+
+	var groups []VideoGroup
+	var current *VideoGroup
+
+	for rows.Next() {
+		var video Video
+		var dateAdded sql.NullTime
+		var dateScanned sql.NullTime
+		var quality sql.NullString
+
+		if err := rows.Scan(&video.ID, &video.Title, &video.Filename, &quality, &video.Duration, &dateAdded, &dateScanned); err != nil {
+			return nil, fmt.Errorf("scan video: %w", err)
+		}
+
+		assignVideoTimes(&video, dateAdded, dateScanned)
+		if quality.Valid {
+			video.Quality = quality.String
+		}
+
+		if current == nil || current.Title != video.Title {
+			groups = append(groups, VideoGroup{
+				ID:          video.ID,
+				Title:       video.Title,
+				Duration:    video.Duration,
+				DateAdded:   video.DateAdded,
+				DateScanned: video.DateScanned,
+				Variants:    []VideoVariant{},
+			})
+			current = &groups[len(groups)-1]
+		}
+
+		qualityStr := video.Quality
+		if qualityStr == "" {
+			qualityStr = "Original"
+		}
+
+		current.Variants = append(current.Variants, VideoVariant{
+			ID:       video.ID,
+			Quality:  qualityStr,
+			Filename: video.Filename,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate videos: %w", err)
+	}
+
+	return groups, nil
+}
+
+func (s *Store) GetVideoGroupByID(id int64) (VideoGroup, error) {
+	var title string
+	if err := s.db.QueryRow(`SELECT title FROM videos WHERE id = ?`, id).Scan(&title); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return VideoGroup{}, err
+		}
+		return VideoGroup{}, fmt.Errorf("get video title by id: %w", err)
+	}
+
+	rows, err := s.db.Query(`
+		SELECT id, title, filename, quality, duration, date_added, date_scanned
+		FROM videos
+		WHERE title = ?
+		ORDER BY
+			CASE quality
+				WHEN '4K' THEN 1
+				WHEN '2160p' THEN 1
+				WHEN '1080p' THEN 2
+				WHEN '720p' THEN 3
+				WHEN '480p' THEN 4
+				ELSE 5
+			END,
+			id DESC`, title)
+	if err != nil {
+		return VideoGroup{}, fmt.Errorf("query video group: %w", err)
+	}
+	defer rows.Close()
+
+	var group VideoGroup
+	initialized := false
+	for rows.Next() {
+		var video Video
+		var dateAdded sql.NullTime
+		var dateScanned sql.NullTime
+		var quality sql.NullString
+
+		if err := rows.Scan(&video.ID, &video.Title, &video.Filename, &quality, &video.Duration, &dateAdded, &dateScanned); err != nil {
+			return VideoGroup{}, fmt.Errorf("scan video group row: %w", err)
+		}
+
+		assignVideoTimes(&video, dateAdded, dateScanned)
+		if quality.Valid {
+			video.Quality = quality.String
+		}
+
+		if !initialized {
+			group = VideoGroup{
+				ID:          video.ID,
+				Title:       video.Title,
+				Duration:    video.Duration,
+				DateAdded:   video.DateAdded,
+				DateScanned: video.DateScanned,
+				Variants:    []VideoVariant{},
+			}
+			initialized = true
+		}
+
+		qualityStr := video.Quality
+		if qualityStr == "" {
+			qualityStr = "Original"
+		}
+
+		group.Variants = append(group.Variants, VideoVariant{
+			ID:       video.ID,
+			Quality:  qualityStr,
+			Filename: video.Filename,
+		})
+	}
+
+	if err := rows.Err(); err != nil {
+		return VideoGroup{}, fmt.Errorf("iterate video group: %w", err)
+	}
+	if !initialized {
+		return VideoGroup{}, sql.ErrNoRows
+	}
+
+	return group, nil
+}

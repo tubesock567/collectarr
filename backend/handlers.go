@@ -1,0 +1,539 @@
+package main
+
+import (
+	"context"
+	"crypto/rand"
+	"database/sql"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"log/slog"
+	"mime"
+	"net/http"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"strconv"
+	"strings"
+	"sync"
+	"time"
+
+	"github.com/gorilla/mux"
+	"golang.org/x/crypto/bcrypt"
+)
+
+const sessionCookieName = "collectarr_session"
+
+type API struct {
+	store    *Store
+	scanner  *Scanner
+	logger   *slog.Logger
+	rngMu    sync.Mutex
+	rngSeed  int64
+	thumbWg  sync.WaitGroup
+	sessMu   sync.RWMutex
+	sessions map[string]string
+}
+
+func NewAPI(store *Store, scanner *Scanner, logger *slog.Logger) *API {
+	return &API{
+		store:    store,
+		scanner:  scanner,
+		logger:   logger,
+		rngSeed:  time.Now().UnixNano(),
+		sessions: map[string]string{},
+	}
+}
+
+func (api *API) Router() http.Handler {
+	router := mux.NewRouter()
+	router.Use(corsMiddleware)
+
+	authRouter := router.PathPrefix("/api").Subrouter()
+	authRouter.HandleFunc("/auth/login", api.handleLogin).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.HandleFunc("/auth/logout", api.handleLogout).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/auth/me", api.authMiddleware(http.HandlerFunc(api.handleMe))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/auth/change-password", api.authMiddleware(http.HandlerFunc(api.handleChangePassword))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/videos", api.authMiddleware(http.HandlerFunc(api.handleListVideos))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/videos/{id:[0-9]+}", api.authMiddleware(http.HandlerFunc(api.handleGetVideo))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/scan", api.authMiddleware(http.HandlerFunc(api.handleScan))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/video/{id:[0-9]+}/stream", api.authMiddleware(http.HandlerFunc(api.handleStreamVideo))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/video/{id:[0-9]+}/thumbnail", api.authMiddleware(http.HandlerFunc(api.handleThumbnail))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/thumbnails/generate", api.authMiddleware(http.HandlerFunc(api.handleGenerateThumbnails))).Methods(http.MethodPost, http.MethodOptions)
+
+	// Serve frontend static files
+	router.PathPrefix("/").Handler(http.FileServer(http.Dir("/app/frontend/build")))
+
+	return router
+}
+
+func (api *API) handleLogin(w http.ResponseWriter, r *http.Request) {
+	var req LoginRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid login payload"})
+		return
+	}
+
+	req.Username = strings.TrimSpace(req.Username)
+	if req.Username == "" || req.Password == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "username and password are required"})
+		return
+	}
+
+	user, err := api.store.GetUserByUsername(req.Username)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid credentials"})
+			return
+		}
+		api.logger.Error("load login user failed", "username", req.Username, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "login failed"})
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid credentials"})
+		return
+	}
+
+	sessionID, err := generateSessionID()
+	if err != nil {
+		api.logger.Error("generate session failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "login failed"})
+		return
+	}
+
+	api.sessMu.Lock()
+	api.sessions[sessionID] = user.Username
+	api.sessMu.Unlock()
+
+	http.SetCookie(w, api.newSessionCookie(sessionID))
+	writeJSON(w, http.StatusOK, user)
+}
+
+func (api *API) handleLogout(w http.ResponseWriter, r *http.Request) {
+	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
+		api.sessMu.Lock()
+		delete(api.sessions, cookie.Value)
+		api.sessMu.Unlock()
+	}
+
+	http.SetCookie(w, api.expiredSessionCookie())
+	writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
+}
+
+func (api *API) handleMe(w http.ResponseWriter, r *http.Request) {
+	user, ok := userFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, user)
+}
+
+func (api *API) handleChangePassword(w http.ResponseWriter, r *http.Request) {
+	user, ok := userFromContext(r.Context())
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
+		return
+	}
+
+	var req ChangePasswordRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid password payload"})
+		return
+	}
+
+	if req.CurrentPassword == "" || req.NewPassword == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "current and new passwords are required"})
+		return
+	}
+	if req.CurrentPassword == req.NewPassword {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "new password must be different"})
+		return
+	}
+
+	storedUser, err := api.store.GetUserByUsername(user.Username)
+	if err != nil {
+		api.logger.Error("load change-password user failed", "username", user.Username, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to change password"})
+		return
+	}
+
+	if err := bcrypt.CompareHashAndPassword([]byte(storedUser.Password), []byte(req.CurrentPassword)); err != nil {
+		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "current password is incorrect"})
+		return
+	}
+
+	newHash, err := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	if err != nil {
+		api.logger.Error("hash new password failed", "username", user.Username, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to change password"})
+		return
+	}
+
+	if err := api.store.UpdatePassword(user.Username, string(newHash)); err != nil {
+		api.logger.Error("update password failed", "username", user.Username, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to change password"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "password_updated"})
+}
+
+func (api *API) handleListVideos(w http.ResponseWriter, r *http.Request) {
+	groups, err := api.store.ListVideoGroups()
+	if err != nil {
+		api.logger.Error("list video groups failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list videos"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, groups)
+}
+
+func (api *API) handleGetVideo(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(mux.Vars(r)["id"])
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid video id"})
+		return
+	}
+
+	group, err := api.store.GetVideoGroupByID(id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "video not found"})
+			return
+		}
+		api.logger.Error("get video group failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load video"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, group)
+}
+
+func (api *API) handleScan(w http.ResponseWriter, r *http.Request) {
+	report, err := api.scanner.ScanLibrary(r.Context())
+	if err != nil {
+		api.logger.Error("scan failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "scan failed"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, report)
+}
+
+func (api *API) handleStreamVideo(w http.ResponseWriter, r *http.Request) {
+	video, err := api.videoFromRequest(r)
+	if err != nil {
+		api.writeVideoError(w, err)
+		return
+	}
+
+	file, err := os.Open(video.Path)
+	if err != nil {
+		api.logger.Error("open video failed", "id", video.ID, "error", err)
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: "video file not found"})
+		return
+	}
+	defer file.Close()
+
+	info, err := file.Stat()
+	if err != nil {
+		api.logger.Error("stat video failed", "id", video.ID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to stream video"})
+		return
+	}
+
+	contentType := mime.TypeByExtension(filepath.Ext(video.Filename))
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Accept-Ranges", "bytes")
+	http.ServeContent(w, r, video.Filename, info.ModTime(), file)
+}
+
+func (api *API) handleThumbnail(w http.ResponseWriter, r *http.Request) {
+	video, err := api.videoFromRequest(r)
+	if err != nil {
+		api.writeVideoError(w, err)
+		return
+	}
+
+	thumbnailPath, generated, err := api.ensureThumbnail(r.Context(), video)
+	if err != nil {
+		if errors.Is(err, errThumbnailFFmpegMissing) {
+			writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "thumbnail generation requires ffmpeg"})
+			return
+		}
+
+		api.logger.Error("ensure thumbnail failed", "id", video.ID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to generate thumbnail"})
+		return
+	}
+
+	if !generated {
+		if _, err := os.Stat(thumbnailPath); err != nil {
+			api.logger.Error("check thumbnail failed", "id", video.ID, "error", err)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load thumbnail"})
+			return
+		}
+	}
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	http.ServeFile(w, r, thumbnailPath)
+}
+
+func (api *API) handleGenerateThumbnails(w http.ResponseWriter, r *http.Request) {
+	api.thumbWg.Add(1)
+	go func() {
+		defer api.thumbWg.Done()
+		api.generateAllThumbnails()
+	}()
+
+	writeJSON(w, http.StatusAccepted, map[string]string{
+		"status":  "started",
+		"message": "Thumbnail generation started in background",
+	})
+}
+
+func (api *API) generateAllThumbnails() {
+	api.logger.Info("starting bulk thumbnail generation")
+
+	videos, err := api.store.ListVideos()
+	if err != nil {
+		api.logger.Error("failed to list videos for thumbnails", "error", err)
+		return
+	}
+
+	for i, video := range videos {
+		api.logger.Info("generating thumbnail", "video_id", video.ID, "title", video.Title, "progress", fmt.Sprintf("%d/%d", i+1, len(videos)))
+
+		thumbnailPath := thumbnailFilePath(video.ID)
+		if _, err := os.Stat(thumbnailPath); err == nil {
+			api.logger.Info("skipping cached thumbnail", "video_id", video.ID, "title", video.Title)
+			continue
+		} else if !errors.Is(err, os.ErrNotExist) {
+			api.logger.Error("check cached thumbnail failed", "video_id", video.ID, "error", err)
+			continue
+		}
+
+		if _, _, err := api.ensureThumbnail(context.Background(), video); err != nil {
+			if errors.Is(err, errThumbnailFFmpegMissing) {
+				api.logger.Error("bulk thumbnail generation unavailable", "error", err)
+				return
+			}
+
+			api.logger.Error("generate thumbnail in bulk failed", "video_id", video.ID, "title", video.Title, "error", err)
+		}
+	}
+
+	api.logger.Info("bulk thumbnail generation complete", "total", len(videos))
+}
+
+var errThumbnailFFmpegMissing = errors.New("ffmpeg not available")
+
+func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bool, error) {
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return "", false, errThumbnailFFmpegMissing
+	}
+
+	thumbnailDir := thumbnailCacheDir()
+	if err := os.MkdirAll(thumbnailDir, 0o755); err != nil {
+		return "", false, fmt.Errorf("create thumbnail directory: %w", err)
+	}
+
+	thumbnailPath := thumbnailFilePath(video.ID)
+	if _, err := os.Stat(thumbnailPath); err == nil {
+		return thumbnailPath, false, nil
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", false, fmt.Errorf("check thumbnail cache: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+
+	ssTime := "1"
+	if video.Duration > 0 {
+		minTime := float64(video.Duration) * 0.1
+		maxTime := float64(video.Duration) * 0.9
+		randomTime := minTime + api.randomFloat64()*(maxTime-minTime)
+		ssTime = fmt.Sprintf("%.2f", randomTime)
+	}
+
+	cmd := exec.CommandContext(ctx, ffmpegPath,
+		"-y",
+		"-ss", ssTime,
+		"-i", video.Path,
+		"-frames:v", "1",
+		"-vf", "scale=640:360",
+		thumbnailPath,
+	)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return "", false, fmt.Errorf("generate thumbnail: %w (output: %s)", err, string(output))
+	}
+
+	return thumbnailPath, true, nil
+}
+
+func thumbnailCacheDir() string {
+	return filepath.Join(os.TempDir(), "collectarr-thumbnails")
+}
+
+func thumbnailFilePath(videoID int64) string {
+	return filepath.Join(thumbnailCacheDir(), fmt.Sprintf("%d.jpg", videoID))
+}
+
+func (api *API) videoFromRequest(r *http.Request) (Video, error) {
+	id, err := parseID(mux.Vars(r)["id"])
+	if err != nil {
+		return Video{}, err
+	}
+	return api.store.GetVideoByID(id)
+}
+
+func (api *API) writeVideoError(w http.ResponseWriter, err error) {
+	if errors.Is(err, sql.ErrNoRows) {
+		writeJSON(w, http.StatusNotFound, errorResponse{Error: "video not found"})
+		return
+	}
+
+	var numErr *strconv.NumError
+	if errors.As(err, &numErr) {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid video id"})
+		return
+	}
+
+	api.logger.Error("video lookup failed", "error", err)
+	writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load video"})
+}
+
+func parseID(raw string) (int64, error) {
+	return strconv.ParseInt(raw, 10, 64)
+}
+
+func writeJSON(w http.ResponseWriter, status int, payload any) {
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(status)
+	if err := json.NewEncoder(w).Encode(payload); err != nil {
+		http.Error(w, `{"error":"failed to encode response"}`, http.StatusInternalServerError)
+	}
+}
+
+type contextKey string
+
+const userContextKey contextKey = "user"
+
+func (api *API) authMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		cookie, err := r.Cookie(sessionCookieName)
+		if err != nil || cookie.Value == "" {
+			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
+			return
+		}
+
+		api.sessMu.RLock()
+		username, ok := api.sessions[cookie.Value]
+		api.sessMu.RUnlock()
+		if !ok {
+			http.SetCookie(w, api.expiredSessionCookie())
+			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
+			return
+		}
+
+		user, err := api.store.GetUserByUsername(username)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				api.sessMu.Lock()
+				delete(api.sessions, cookie.Value)
+				api.sessMu.Unlock()
+				http.SetCookie(w, api.expiredSessionCookie())
+				writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
+				return
+			}
+
+			api.logger.Error("load authenticated user failed", "username", username, "error", err)
+			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to validate session"})
+			return
+		}
+
+		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userContextKey, User{ID: user.ID, Username: user.Username})))
+	})
+}
+
+func userFromContext(ctx context.Context) (User, bool) {
+	user, ok := ctx.Value(userContextKey).(User)
+	return user, ok
+}
+
+func generateSessionID() (string, error) {
+	buf := make([]byte, 32)
+	if _, err := rand.Read(buf); err != nil {
+		return "", err
+	}
+	return hex.EncodeToString(buf), nil
+}
+
+func (api *API) newSessionCookie(sessionID string) *http.Cookie {
+	return &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    sessionID,
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   60 * 60 * 24 * 7,
+	}
+}
+
+func (api *API) expiredSessionCookie() *http.Cookie {
+	return &http.Cookie{
+		Name:     sessionCookieName,
+		Value:    "",
+		Path:     "/",
+		HttpOnly: true,
+		SameSite: http.SameSiteLaxMode,
+		MaxAge:   -1,
+		Expires:  time.Unix(0, 0),
+	}
+}
+
+func (api *API) randomFloat64() float64 {
+	api.rngMu.Lock()
+	defer api.rngMu.Unlock()
+	api.rngSeed = (api.rngSeed*1664525 + 1013904223) & 0x7fffffffffffffff
+	return float64(api.rngSeed%1_000_000) / 1_000_000
+}
+
+func corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		origin := r.Header.Get("Origin")
+		if origin != "" {
+			w.Header().Set("Access-Control-Allow-Origin", origin)
+			w.Header().Set("Vary", "Origin")
+		} else {
+			w.Header().Set("Access-Control-Allow-Origin", "*")
+		}
+		w.Header().Set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+		w.Header().Set("Access-Control-Allow-Headers", "Content-Type, Range")
+		w.Header().Set("Access-Control-Expose-Headers", "Accept-Ranges, Content-Length, Content-Range, Content-Type")
+		w.Header().Set("Access-Control-Allow-Credentials", "true")
+
+		if r.Method == http.MethodOptions {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+
+		next.ServeHTTP(w, r)
+	})
+}

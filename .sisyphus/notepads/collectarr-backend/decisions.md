@@ -1,0 +1,3 @@
+- Chose `gorilla/mux` for straightforward route parameter handling and kept middleware limited to a lightweight CORS wrapper for local frontend development.
+- Implemented streaming with `http.ServeContent` so range requests and seeking work naturally, and made thumbnail generation optional/on-demand through `ffmpeg` when available.
+- Kept frontend/backend integration simple in Docker Compose by mounting built frontend assets into the backend container and installing Alpine `ffmpeg`, which also provides `ffprobe` for scan metadata.

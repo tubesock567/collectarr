@@ -1,0 +1,3 @@
+- Backend uses a small `Store` layer with raw SQL over `mattn/go-sqlite3`, and keeps API JSON free of internal file paths by omitting `Video.Path` from responses.
+- Library scans recurse through `MEDIA_PATH`, normalize titles from filenames, use `ffprobe` opportunistically for duration, and skip conflicting duplicates while logging structured scan progress.
+- Docker deployment now depends on a prebuilt `frontend/build` bind mount at `/app/frontend/build`, which the Go router serves via a catch-all handler registered after all `/api/*` routes.
