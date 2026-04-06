@@ -53,9 +53,10 @@
 	{:else}
 		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
 			{#each videos as video (video.id)}
-				{@const validVariants = video.variants?.filter(v => v.quality && v.quality !== 'Original') || []}
-				{@const hasMultiple = validVariants.length > 1}
-				{@const firstVariant = validVariants[0]}
+				{@const validVariants = video.variants?.filter(v => v.quality !== null && v.quality !== undefined) || []}
+				{@const displayVariants = validVariants.map(v => ({...v, quality: v.quality || 'Original'}))}
+				{@const hasMultiple = displayVariants.length > 1}
+				{@const firstVariant = displayVariants[0]}
 				<a href={`/player/${video.id}`} class="group flex flex-col space-y-3 cursor-pointer">
 					<div class="w-full aspect-video bg-neutral-900 border border-neutral-800 overflow-hidden relative group-hover:border-neutral-500 transition-colors duration-300">
 						<img 
@@ -64,23 +65,23 @@
 							class="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out"
 							onerror={(e) => { e.target.style.display = 'none'; }}
 						/>
-						{#if firstVariant}
-							<div class="absolute top-2 left-2 flex items-center gap-1">
-								<span class="bg-black/80 px-2 py-1 text-[10px] font-mono tracking-wider text-white leading-none flex items-center h-5">
-									{firstVariant.quality}
-								</span>
-								{#if hasMultiple}
-									<div class="relative hover:block group/plus">
-										<span class="bg-black/80 px-1.5 py-1 text-[10px] font-mono tracking-wider text-white cursor-help leading-none flex items-center justify-center h-5 w-5">+</span>
-										<div class="absolute top-full left-0 mt-1 hidden group-hover/plus:block z-10">
-											<div class="bg-black/90 border border-neutral-700 px-2 py-1.5 text-[10px] font-mono text-white whitespace-nowrap">
-												{validVariants.map(v => v.quality).join(', ')}
-											</div>
+{#if firstVariant}
+						<div class="absolute top-2 left-2 flex items-center gap-1">
+							<span class="bg-black/80 px-2 py-1 text-[10px] font-mono tracking-wider text-white leading-none flex items-center h-5">
+								{firstVariant.quality}
+							</span>
+							{#if hasMultiple}
+								<div class="relative hover:block group/plus">
+									<span class="bg-black/80 px-1.5 py-1 text-[10px] font-mono tracking-wider text-white cursor-help leading-none flex items-center justify-center h-5 w-5">+</span>
+									<div class="absolute top-full left-0 mt-1 hidden group-hover/plus:block z-10">
+										<div class="bg-black/90 border border-neutral-700 px-2 py-1.5 text-[10px] font-mono text-white whitespace-nowrap">
+											{displayVariants.map(v => v.quality).join(', ')}
 										</div>
 									</div>
-								{/if}
-							</div>
-						{/if}
+								</div>
+							{/if}
+						</div>
+					{/if}
 						<div class="absolute bottom-2 right-2 bg-black/80 px-2 py-1 text-[10px] font-mono tracking-wider text-white">
 							{formatDuration(video.duration)}
 						</div>

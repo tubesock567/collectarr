@@ -267,11 +267,9 @@
 							bind:value={selectedVariantId}
 							onchange={(e) => updateSelectedVariant(e.currentTarget.value)}
 						>
-							{#each video.variants as variant (variant.id)}
-								{#if variant.quality && variant.quality !== 'Original'}
-									<option value={variant.id}>{variant.quality}</option>
-								{/if}
-							{/each}
+						{#each video.variants as variant (variant.id)}
+							<option value={variant.id}>{variant.quality || 'Original'}</option>
+						{/each}
 						</select>
 					</label>
 				{/if}
