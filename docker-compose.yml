@@ -6,6 +6,7 @@ services:
     volumes:
       - ./data:/data
       - /path/to/media:/media
+      - /path/to/hardlink_destination:/hardlink_destination
       - ./frontend/build:/app/frontend/build:ro
     environment:
       - MEDIA_PATH=/media
