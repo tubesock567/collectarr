@@ -33,6 +33,14 @@ CREATE TABLE IF NOT EXISTS users (
 	password_hash TEXT NOT NULL
 );`
 
+const createSettingsTableSQL = `
+CREATE TABLE IF NOT EXISTS settings (
+	key TEXT PRIMARY KEY,
+	value TEXT
+);`
+
+const hardLinkDestinationSettingKey = "hard_link_destination"
+
 type Store struct {
 	db     *sql.DB
 	logger *slog.Logger
@@ -70,6 +78,9 @@ func (s *Store) Init() error {
 	}
 	if _, err := s.db.Exec(createUsersTableSQL); err != nil {
 		return fmt.Errorf("create users table: %w", err)
+	}
+	if _, err := s.db.Exec(createSettingsTableSQL); err != nil {
+		return fmt.Errorf("create settings table: %w", err)
 	}
 
 	hasTitle, err := s.hasVideosColumn("title")
@@ -163,6 +174,46 @@ func (s *Store) CreateDefaultUser() error {
 	}
 
 	return nil
+}
+
+func (s *Store) GetSetting(key string) (string, error) {
+	var value string
+	if err := s.db.QueryRow(`SELECT value FROM settings WHERE key = ?`, key).Scan(&value); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", err
+		}
+		return "", fmt.Errorf("get setting: %w", err)
+	}
+
+	return value, nil
+}
+
+func (s *Store) SetSetting(key, value string) error {
+	_, err := s.db.Exec(`
+		INSERT INTO settings (key, value)
+		VALUES (?, ?)
+		ON CONFLICT(key) DO UPDATE SET value = excluded.value`, key, value)
+	if err != nil {
+		return fmt.Errorf("set setting: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) GetHardLinkDestination() (string, error) {
+	return s.GetSetting(hardLinkDestinationSettingKey)
+}
+
+func (s *Store) SetHardLinkDestination(path string) error {
+	return s.SetSetting(hardLinkDestinationSettingKey, path)
+}
+
+func (s *Store) GetHardlinkDestination() (string, error) {
+	return s.GetHardLinkDestination()
+}
+
+func (s *Store) SetHardlinkDestination(destination string) error {
+	return s.SetHardLinkDestination(destination)
 }
 
 func (s *Store) hasVideosColumn(name string) (bool, error) {

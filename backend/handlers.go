@@ -14,6 +14,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -24,6 +25,14 @@ import (
 )
 
 const sessionCookieName = "collectarr_session"
+
+var browseableVideoExtensions = map[string]struct{}{
+	".mp4":  {},
+	".mkv":  {},
+	".avi":  {},
+	".mov":  {},
+	".webm": {},
+}
 
 type API struct {
 	store    *Store
@@ -58,6 +67,10 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/videos", api.authMiddleware(http.HandlerFunc(api.handleListVideos))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/videos/{id:[0-9]+}", api.authMiddleware(http.HandlerFunc(api.handleGetVideo))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/scan", api.authMiddleware(http.HandlerFunc(api.handleScan))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/directory", api.authMiddleware(http.HandlerFunc(api.handleDirectoryListing))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/hardlink", api.authMiddleware(http.HandlerFunc(api.handleCreateHardlinks))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/settings/hardlink-dest", api.authMiddleware(http.HandlerFunc(api.handleGetHardlinkDestination))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/settings/hardlink-dest", api.authMiddleware(http.HandlerFunc(api.handleSetHardlinkDestination))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/stream", api.authMiddleware(http.HandlerFunc(api.handleStreamVideo))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/thumbnail", api.authMiddleware(http.HandlerFunc(api.handleThumbnail))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/thumbnails/generate", api.authMiddleware(http.HandlerFunc(api.handleGenerateThumbnails))).Methods(http.MethodPost, http.MethodOptions)
@@ -224,6 +237,199 @@ func (api *API) handleScan(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, report)
+}
+
+func (api *API) handleDirectoryListing(w http.ResponseWriter, r *http.Request) {
+	relPath, err := normalizeRelativeMediaPath(r.URL.Query().Get("path"))
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+		return
+	}
+
+	dirPath, err := api.resolveMediaPath(relPath)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+		return
+	}
+
+	info, err := os.Stat(dirPath)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "directory not found"})
+			return
+		}
+		api.logger.Error("stat directory failed", "path", dirPath, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list directory"})
+		return
+	}
+	if !info.IsDir() {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "path must be a directory"})
+		return
+	}
+
+	entries, err := os.ReadDir(dirPath)
+	if err != nil {
+		api.logger.Error("read directory failed", "path", dirPath, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to list directory"})
+		return
+	}
+
+	response := make([]DirectoryEntry, 0, len(entries)+1)
+	if relPath != "" {
+		parentPath := filepath.Dir(relPath)
+		if parentPath == "." {
+			parentPath = ""
+		}
+		response = append(response, DirectoryEntry{
+			Name:        "..",
+			Path:        filepath.ToSlash(parentPath),
+			IsDirectory: true,
+		})
+	}
+
+	var directories []DirectoryEntry
+	var files []DirectoryEntry
+	for _, entry := range entries {
+		entryRelPath := joinRelativePath(relPath, entry.Name())
+		if entry.IsDir() {
+			directories = append(directories, DirectoryEntry{
+				Name:        entry.Name(),
+				Path:        entryRelPath,
+				IsDirectory: true,
+			})
+			continue
+		}
+
+		if !isBrowsableVideoFile(entry.Name()) {
+			continue
+		}
+
+		entryInfo, err := entry.Info()
+		if err != nil {
+			api.logger.Warn("read directory entry info failed", "path", filepath.Join(dirPath, entry.Name()), "error", err)
+			continue
+		}
+
+		files = append(files, DirectoryEntry{
+			Name:        entry.Name(),
+			Path:        entryRelPath,
+			IsDirectory: false,
+			Size:        entryInfo.Size(),
+		})
+	}
+
+	sort.Slice(directories, func(i, j int) bool {
+		return strings.ToLower(directories[i].Name) < strings.ToLower(directories[j].Name)
+	})
+	sort.Slice(files, func(i, j int) bool {
+		return strings.ToLower(files[i].Name) < strings.ToLower(files[j].Name)
+	})
+
+	response = append(response, directories...)
+	response = append(response, files...)
+	writeJSON(w, http.StatusOK, response)
+}
+
+func (api *API) handleCreateHardlinks(w http.ResponseWriter, r *http.Request) {
+	var req HardlinkRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid hardlink payload"})
+		return
+	}
+	if len(req.SourcePaths) == 0 {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "sourcePaths is required"})
+		return
+	}
+
+	destinationRelPath, err := normalizeRelativeMediaPath(req.DestinationDir)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid destinationDir"})
+		return
+	}
+
+	destinationPath, err := api.resolveMediaPath(destinationRelPath)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid destinationDir"})
+		return
+	}
+
+	if err := os.MkdirAll(destinationPath, 0o755); err != nil {
+		api.logger.Error("create hardlink destination failed", "path", destinationPath, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to prepare destination directory"})
+		return
+	}
+
+	result := HardlinkResponse{Errors: []HardlinkResult{}}
+	for _, sourcePath := range req.SourcePaths {
+		sourceRelPath, err := normalizeRelativeMediaPath(sourcePath)
+		if err != nil {
+			result.Errors = append(result.Errors, HardlinkResult{SourcePath: sourcePath, Error: err.Error()})
+			continue
+		}
+
+		resolvedSourcePath, err := api.resolveMediaPath(sourceRelPath)
+		if err != nil {
+			result.Errors = append(result.Errors, HardlinkResult{SourcePath: sourcePath, Error: err.Error()})
+			continue
+		}
+
+		info, err := os.Stat(resolvedSourcePath)
+		if err != nil {
+			result.Errors = append(result.Errors, HardlinkResult{SourcePath: sourcePath, Error: err.Error()})
+			continue
+		}
+		if info.IsDir() {
+			result.Errors = append(result.Errors, HardlinkResult{SourcePath: sourcePath, Error: "source path must be a file"})
+			continue
+		}
+		if !isBrowsableVideoFile(info.Name()) {
+			result.Errors = append(result.Errors, HardlinkResult{SourcePath: sourcePath, Error: "unsupported file type"})
+			continue
+		}
+
+		linkPath := filepath.Join(destinationPath, filepath.Base(resolvedSourcePath))
+		if err := os.Link(resolvedSourcePath, linkPath); err != nil {
+			result.Errors = append(result.Errors, HardlinkResult{SourcePath: sourcePath, Error: err.Error()})
+			continue
+		}
+
+		result.SuccessCount++
+	}
+
+	writeJSON(w, http.StatusOK, result)
+}
+
+func (api *API) handleGetHardlinkDestination(w http.ResponseWriter, r *http.Request) {
+	destination, err := api.store.GetHardlinkDestination()
+	if err != nil {
+		api.logger.Error("get hardlink destination failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load hardlink destination"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, HardlinkDestinationResponse{Destination: filepath.ToSlash(destination)})
+}
+
+func (api *API) handleSetHardlinkDestination(w http.ResponseWriter, r *http.Request) {
+	var req HardlinkDestinationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid hardlink destination payload"})
+		return
+	}
+
+	destination, err := normalizeRelativeMediaPath(req.Destination)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid destination"})
+		return
+	}
+
+	if err := api.store.SetHardlinkDestination(destination); err != nil {
+		api.logger.Error("set hardlink destination failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to save hardlink destination"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, HardlinkDestinationResponse{Destination: filepath.ToSlash(destination)})
 }
 
 func (api *API) handleStreamVideo(w http.ResponseWriter, r *http.Request) {
@@ -416,6 +622,65 @@ func (api *API) writeVideoError(w http.ResponseWriter, err error) {
 
 func parseID(raw string) (int64, error) {
 	return strconv.ParseInt(raw, 10, 64)
+}
+
+func normalizeRelativeMediaPath(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	raw = strings.ReplaceAll(raw, "\\", "/")
+	if raw == "" || raw == "." || raw == "/" {
+		return "", nil
+	}
+	if strings.HasPrefix(raw, "/") {
+		return "", errors.New("path must be relative")
+	}
+
+	cleaned := filepath.Clean(raw)
+	if cleaned == "." {
+		return "", nil
+	}
+
+	for _, part := range strings.Split(filepath.ToSlash(cleaned), "/") {
+		if part == ".." {
+			return "", errors.New("path cannot contain '..'")
+		}
+	}
+
+	return cleaned, nil
+}
+
+func (api *API) resolveMediaPath(relPath string) (string, error) {
+	mediaRoot, err := filepath.Abs(api.scanner.mediaPath)
+	if err != nil {
+		return "", fmt.Errorf("resolve media root: %w", err)
+	}
+
+	targetPath, err := filepath.Abs(filepath.Join(mediaRoot, relPath))
+	if err != nil {
+		return "", fmt.Errorf("resolve media path: %w", err)
+	}
+
+	relToRoot, err := filepath.Rel(mediaRoot, targetPath)
+	if err != nil {
+		return "", fmt.Errorf("check media path: %w", err)
+	}
+	if relToRoot == ".." || strings.HasPrefix(relToRoot, ".."+string(filepath.Separator)) {
+		return "", errors.New("path escapes media root")
+	}
+
+	return targetPath, nil
+}
+
+func joinRelativePath(parts ...string) string {
+	joined := filepath.Join(parts...)
+	if joined == "." {
+		return ""
+	}
+	return filepath.ToSlash(joined)
+}
+
+func isBrowsableVideoFile(name string) bool {
+	_, ok := browseableVideoExtensions[strings.ToLower(filepath.Ext(name))]
+	return ok
 }
 
 func writeJSON(w http.ResponseWriter, status int, payload any) {

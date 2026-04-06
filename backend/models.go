@@ -59,6 +59,36 @@ type ChangePasswordRequest struct {
 	NewPassword     string `json:"new_password"`
 }
 
+type DirectoryEntry struct {
+	Name        string `json:"name"`
+	Path        string `json:"path"`
+	IsDirectory bool   `json:"isDirectory"`
+	Size        int64  `json:"size,omitempty"`
+}
+
+type HardlinkRequest struct {
+	SourcePaths    []string `json:"sourcePaths"`
+	DestinationDir string   `json:"destinationDir"`
+}
+
+type HardlinkResult struct {
+	SourcePath string `json:"sourcePath"`
+	Error      string `json:"error"`
+}
+
+type HardlinkResponse struct {
+	SuccessCount int              `json:"successCount"`
+	Errors       []HardlinkResult `json:"errors"`
+}
+
+type HardlinkDestinationRequest struct {
+	Destination string `json:"destination"`
+}
+
+type HardlinkDestinationResponse struct {
+	Destination string `json:"destination"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }

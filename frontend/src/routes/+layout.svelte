@@ -39,6 +39,7 @@
 				<span class="text-[10px] font-semibold tracking-[0.25em] uppercase text-neutral-500">{$auth.username}</span>
 			{/if}
 			<a href="/" class="text-xs font-semibold tracking-widest uppercase {$page.url.pathname === '/' ? 'text-white' : 'text-neutral-500'} hover:text-white transition-colors">Library</a>
+			<a href="/directory" class="text-xs font-semibold tracking-widest uppercase {$page.url.pathname === '/directory' ? 'text-white' : 'text-neutral-500'} hover:text-white transition-colors">Directory</a>
 			<a href="/settings" class="text-xs font-semibold tracking-widest uppercase {$page.url.pathname === '/settings' ? 'text-white' : 'text-neutral-500'} hover:text-white transition-colors">Settings</a>
 			{#if $auth.isAuthenticated}
 				<button class="text-xs font-semibold tracking-widest uppercase text-neutral-500 hover:text-white transition-colors" onclick={() => logout()}>

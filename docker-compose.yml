@@ -1,15 +1,13 @@
 services:
   collectarr:
-    build:
-      context: .
-      dockerfile: backend/Dockerfile
+    build: .
     ports:
       - "3000:8080"
-    environment:
-      MEDIA_PATH: ${MEDIA_PATH:-/media}
-      DB_PATH: ${DB_PATH:-/data/collectarr.db}
-      PORT: ${PORT:-8080}
     volumes:
       - ./data:/data
-      - ${MEDIA_HOST_PATH:-/path/to/media}:/media
+      - ${MEDIA_HOST_PATH}:/media
       - ./frontend/build:/app/frontend/build:ro
+    environment:
+      - MEDIA_PATH=/media
+      - DB_PATH=/data/collectarr.db
+      - PORT=8080
