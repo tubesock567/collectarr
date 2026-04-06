@@ -2,10 +2,10 @@ services:
   collectarr:
     build: .
     ports:
-      - "3000:8080"
+      - "8893:8080"
     volumes:
       - ./data:/data
-      - ${MEDIA_HOST_PATH}:/media
+      - /path/to/media:/media
       - ./frontend/build:/app/frontend/build:ro
     environment:
       - MEDIA_PATH=/media
