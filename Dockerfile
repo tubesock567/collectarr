@@ -19,8 +19,6 @@ WORKDIR /app
 
 COPY --from=builder /out/collectarr /usr/local/bin/collectarr
 
-EXPOSE 8080
-
-USER collectarr
+EXPOSE 8090
 
 ENTRYPOINT ["collectarr"]
