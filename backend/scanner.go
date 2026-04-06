@@ -76,7 +76,7 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 			return nil
 		}
 
-		baseName, quality := extractQuality(d.Name())
+		baseName, quality := extractQuality(d.Name(), ctx, resolvedPath, s.logger)
 		video := ScannedVideo{
 			Title:    titleFromFilename(baseName),
 			Filename: d.Name(),
@@ -138,7 +138,7 @@ func titleFromFilename(name string) string {
 	return strings.Join(fields, " ")
 }
 
-func extractQuality(filename string) (baseName, quality string) {
+func extractQuality(filename string, ctx context.Context, path string, logger *slog.Logger) (baseName, quality string) {
 	base := strings.TrimSuffix(filename, filepath.Ext(filename))
 	matches := qualityPattern.FindStringSubmatchIndex(base)
 	if len(matches) >= 4 && matches[0] != -1 && matches[1] == len(base) {
@@ -146,6 +146,11 @@ func extractQuality(filename string) (baseName, quality string) {
 		baseName = strings.TrimSpace(base[:matches[0]])
 		baseName = strings.TrimRight(baseName, "_- ")
 		return baseName, quality
+	}
+
+	resolution := probeResolution(ctx, path, logger)
+	if resolution != "" {
+		return base, resolution
 	}
 
 	return base, ""
@@ -202,4 +207,62 @@ func probeDurationSeconds(ctx context.Context, path string, logger *slog.Logger)
 	}
 
 	return int(seconds + 0.5)
+}
+
+func probeResolution(ctx context.Context, path string, logger *slog.Logger) string {
+	if _, err := exec.LookPath("ffprobe"); err != nil {
+		return ""
+	}
+
+	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(
+		probeCtx,
+		"ffprobe",
+		"-v", "error",
+		"-select_streams", "v:0",
+		"-show_entries", "stream=width,height",
+		"-of", "csv=s=x:p=0",
+		path,
+	)
+
+	output, err := cmd.Output()
+	if err != nil {
+		logger.Warn("ffprobe resolution detection failed", "path", path, "error", err)
+		return ""
+	}
+
+	resolution := strings.TrimSpace(string(output))
+	if resolution == "" {
+		return ""
+	}
+
+	parts := strings.Split(resolution, "x")
+	if len(parts) != 2 {
+		return ""
+	}
+
+	height, err := strconv.Atoi(parts[1])
+	if err != nil {
+		logger.Warn("invalid height value", "path", path, "value", parts[1], "error", err)
+		return ""
+	}
+
+	switch {
+	case height >= 2160:
+		return "2160p"
+	case height >= 1440:
+		return "1440p"
+	case height >= 1080:
+		return "1080p"
+	case height >= 720:
+		return "720p"
+	case height >= 480:
+		return "480p"
+	case height >= 360:
+		return "360p"
+	default:
+		return fmt.Sprintf("%dp", height)
+	}
 }
