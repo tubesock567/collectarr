@@ -232,9 +232,16 @@ func (api *API) handleGetVideo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *API) handleScan(w http.ResponseWriter, r *http.Request) {
-	report, err := api.scanner.ScanLibrary(r.Context())
+	mediaPath, err := api.store.GetMediaPath()
+	if err != nil || mediaPath == "" {
+		mediaPath = api.scanner.mediaPath
+	}
+
+	scanner := NewScanner(mediaPath, api.store, api.logger)
+
+	report, err := scanner.ScanLibrary(r.Context())
 	if err != nil {
-		api.logger.Error("scan failed", "error", err)
+		api.logger.Error("scan failed", "error", err, "media_path", mediaPath)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "scan failed"})
 		return
 	}
