@@ -232,13 +232,11 @@ func (api *API) handleGetVideo(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *API) handleScan(w http.ResponseWriter, r *http.Request) {
-	mediaPath, err := api.store.GetMediaPath()
-	if err != nil || mediaPath == "" {
-		mediaPath = api.scanner.mediaPath
-	}
-
-	if !strings.HasPrefix(mediaPath, "/") {
-		mediaPath = "/" + mediaPath
+	mediaPath, err := api.scanMediaPath()
+	if err != nil {
+		api.logger.Error("resolve scan media path failed", "error", err)
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid media path configuration"})
+		return
 	}
 
 	scanner := NewScanner(mediaPath, api.store, api.logger)
@@ -416,6 +414,10 @@ func (api *API) handleCreateHardlinks(w http.ResponseWriter, r *http.Request) {
 func (api *API) handleGetHardlinkDestination(w http.ResponseWriter, r *http.Request) {
 	destination, err := api.store.GetHardlinkDestination()
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusOK, HardlinkDestinationResponse{Destination: ""})
+			return
+		}
 		api.logger.Error("get hardlink destination failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load hardlink destination"})
 		return
@@ -458,11 +460,23 @@ func (api *API) handleClearDatabase(w http.ResponseWriter, r *http.Request) {
 func (api *API) handleGetMediaPath(w http.ResponseWriter, r *http.Request) {
 	path, err := api.store.GetMediaPath()
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusOK, MediaPathResponse{Path: ""})
+			return
+		}
 		api.logger.Error("get media path failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load media path"})
 		return
 	}
-	writeJSON(w, http.StatusOK, MediaPathResponse{Path: path})
+
+	normalizedPath, err := api.normalizeMediaPathSetting(path)
+	if err != nil {
+		api.logger.Error("normalize media path failed", "error", err, "media_path", path)
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid media path configuration"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, MediaPathResponse{Path: normalizedPath})
 }
 
 func (api *API) handleSetMediaPath(w http.ResponseWriter, r *http.Request) {
@@ -477,13 +491,64 @@ func (api *API) handleSetMediaPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := api.store.SetMediaPath(req.Path); err != nil {
+	normalizedPath, err := api.normalizeMediaPathSetting(req.Path)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
+		return
+	}
+
+	if err := api.store.SetMediaPath(normalizedPath); err != nil {
 		api.logger.Error("set media path failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to save media path"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, MediaPathResponse{Path: req.Path})
+	writeJSON(w, http.StatusOK, MediaPathResponse{Path: normalizedPath})
+}
+
+func (api *API) scanMediaPath() (string, error) {
+	storedPath, err := api.store.GetMediaPath()
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return api.scanner.mediaPath, nil
+		}
+		return "", err
+	}
+	if strings.TrimSpace(storedPath) == "" {
+		return api.scanner.mediaPath, nil
+	}
+
+	normalizedPath, err := api.normalizeMediaPathSetting(storedPath)
+	if err != nil {
+		return "", err
+	}
+
+	return api.resolveMediaPath(normalizedPath)
+}
+
+func (api *API) normalizeMediaPathSetting(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+
+	if strings.HasPrefix(raw, "/") {
+		mediaRoot := filepath.Clean(api.scanner.mediaPath)
+		candidate := filepath.Clean(raw)
+		relPath, err := filepath.Rel(mediaRoot, candidate)
+		if err != nil {
+			return "", fmt.Errorf("normalize media path: %w", err)
+		}
+		if relPath == "." {
+			return "", nil
+		}
+		if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+			return "", errors.New("media path must be inside configured media root")
+		}
+		return normalizeRelativeMediaPath(filepath.ToSlash(relPath))
+	}
+
+	return normalizeRelativeMediaPath(raw)
 }
 
 func (api *API) handleStreamVideo(w http.ResponseWriter, r *http.Request) {
