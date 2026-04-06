@@ -1,6 +1,7 @@
 <script>
 	import { auth, authFetch } from '$lib/auth';
 	import { onMount } from 'svelte';
+	import DirectoryBrowser from '$lib/components/DirectoryBrowser.svelte';
 
 	let activeTab = $state('account');
 
@@ -23,6 +24,8 @@
 	let mediaPathMessage = $state('');
 	let clearingDatabase = $state(false);
 	let clearDatabaseMessage = $state('');
+	let showMediaBrowser = $state(false);
+	let showHardlinkBrowser = $state(false);
 
 	async function readError(res, fallback) {
 		try {
@@ -291,15 +294,24 @@
 						</p>
 					</div>
 
-					<label class="grid gap-2 w-full">
-						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Media Path</span>
-						<input
-							type="text"
-							bind:value={newMediaPath}
-							placeholder="/path/to/media"
-							class="w-full border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500"
-						/>
-					</label>
+					<div class="grid gap-2 w-full">
+						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">New Path</span>
+						<div class="flex gap-2">
+							<input
+								type="text"
+								bind:value={newMediaPath}
+								placeholder="Click Browse to select directory"
+								readonly
+								class="flex-1 border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500 text-sm"
+							/>
+							<button
+								onclick={() => showMediaBrowser = true}
+								class="bg-neutral-800 text-white hover:bg-neutral-700 font-bold uppercase tracking-widest text-xs px-4 py-3 transition-colors"
+							>
+								Browse
+							</button>
+						</div>
+					</div>
 				</div>
 
 				<button
@@ -336,15 +348,24 @@
 						</p>
 					</div>
 
-					<label class="grid gap-2 w-full">
-						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Destination Path</span>
-						<input
-							type="text"
-							bind:value={newDestination}
-							placeholder="/path/to/destination"
-							class="w-full border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500"
-						/>
-					</label>
+					<div class="grid gap-2 w-full">
+						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">New Destination</span>
+						<div class="flex gap-2">
+							<input
+								type="text"
+								bind:value={newDestination}
+								placeholder="Click Browse to select directory"
+								readonly
+								class="flex-1 border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500 text-sm"
+							/>
+							<button
+								onclick={() => showHardlinkBrowser = true}
+								class="bg-neutral-800 text-white hover:bg-neutral-700 font-bold uppercase tracking-widest text-xs px-4 py-3 transition-colors"
+							>
+								Browse
+							</button>
+						</div>
+					</div>
 				</div>
 
 				<button
@@ -458,3 +479,15 @@
 		</div>
 	{/if}
 </div>
+
+<DirectoryBrowser
+	bind:isOpen={showMediaBrowser}
+	title="Select Media Path"
+	onSelect={(path) => { newMediaPath = path; }}
+/>
+
+<DirectoryBrowser
+	bind:isOpen={showHardlinkBrowser}
+	title="Select Hard Link Destination"
+	onSelect={(path) => { newDestination = path; }}
+/>
