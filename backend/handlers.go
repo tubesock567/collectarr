@@ -71,6 +71,9 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/hardlink", api.authMiddleware(http.HandlerFunc(api.handleCreateHardlinks))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/settings/hardlink-dest", api.authMiddleware(http.HandlerFunc(api.handleGetHardlinkDestination))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/settings/hardlink-dest", api.authMiddleware(http.HandlerFunc(api.handleSetHardlinkDestination))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/settings/media-path", api.authMiddleware(http.HandlerFunc(api.handleGetMediaPath))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/settings/media-path", api.authMiddleware(http.HandlerFunc(api.handleSetMediaPath))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/admin/clear-database", api.authMiddleware(http.HandlerFunc(api.handleClearDatabase))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/stream", api.authMiddleware(http.HandlerFunc(api.handleStreamVideo))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/thumbnail", api.authMiddleware(http.HandlerFunc(api.handleThumbnail))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/thumbnails/generate", api.authMiddleware(http.HandlerFunc(api.handleGenerateThumbnails))).Methods(http.MethodPost, http.MethodOptions)
@@ -430,6 +433,46 @@ func (api *API) handleSetHardlinkDestination(w http.ResponseWriter, r *http.Requ
 	}
 
 	writeJSON(w, http.StatusOK, HardlinkDestinationResponse{Destination: filepath.ToSlash(destination)})
+}
+
+func (api *API) handleClearDatabase(w http.ResponseWriter, r *http.Request) {
+	if err := api.store.ClearDatabase(); err != nil {
+		api.logger.Error("clear database failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to clear database"})
+		return
+	}
+	writeJSON(w, http.StatusOK, ClearDatabaseResponse{Status: "database cleared"})
+}
+
+func (api *API) handleGetMediaPath(w http.ResponseWriter, r *http.Request) {
+	path, err := api.store.GetMediaPath()
+	if err != nil {
+		api.logger.Error("get media path failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load media path"})
+		return
+	}
+	writeJSON(w, http.StatusOK, MediaPathResponse{Path: path})
+}
+
+func (api *API) handleSetMediaPath(w http.ResponseWriter, r *http.Request) {
+	var req MediaPathRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid media path payload"})
+		return
+	}
+
+	if req.Path == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "media path is required"})
+		return
+	}
+
+	if err := api.store.SetMediaPath(req.Path); err != nil {
+		api.logger.Error("set media path failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to save media path"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, MediaPathResponse{Path: req.Path})
 }
 
 func (api *API) handleStreamVideo(w http.ResponseWriter, r *http.Request) {

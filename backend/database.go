@@ -40,6 +40,7 @@ CREATE TABLE IF NOT EXISTS settings (
 );`
 
 const hardLinkDestinationSettingKey = "hard_link_destination"
+const mediaPathSettingKey = "media_path"
 
 type Store struct {
 	db     *sql.DB
@@ -214,6 +215,30 @@ func (s *Store) GetHardlinkDestination() (string, error) {
 
 func (s *Store) SetHardlinkDestination(destination string) error {
 	return s.SetHardLinkDestination(destination)
+}
+
+func (s *Store) GetMediaPath() (string, error) {
+	return s.GetSetting(mediaPathSettingKey)
+}
+
+func (s *Store) SetMediaPath(path string) error {
+	return s.SetSetting(mediaPathSettingKey, path)
+}
+
+func (s *Store) ClearDatabase() error {
+	if _, err := s.db.Exec(`DROP TABLE IF EXISTS videos`); err != nil {
+		return fmt.Errorf("drop videos table: %w", err)
+	}
+	if _, err := s.db.Exec(`DROP INDEX IF EXISTS idx_videos_title`); err != nil {
+		return fmt.Errorf("drop videos index: %w", err)
+	}
+	if err := s.Init(); err != nil {
+		return fmt.Errorf("reinitialize database: %w", err)
+	}
+	if s.logger != nil {
+		s.logger.Info("database cleared successfully")
+	}
+	return nil
 }
 
 func (s *Store) hasVideosColumn(name string) (bool, error) {

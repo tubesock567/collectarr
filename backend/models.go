@@ -89,6 +89,18 @@ type HardlinkDestinationResponse struct {
 	Destination string `json:"destination"`
 }
 
+type MediaPathRequest struct {
+	Path string `json:"path"`
+}
+
+type MediaPathResponse struct {
+	Path string `json:"path"`
+}
+
+type ClearDatabaseResponse struct {
+	Status string `json:"status"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
