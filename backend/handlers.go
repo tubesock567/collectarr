@@ -237,6 +237,10 @@ func (api *API) handleScan(w http.ResponseWriter, r *http.Request) {
 		mediaPath = api.scanner.mediaPath
 	}
 
+	if !strings.HasPrefix(mediaPath, "/") {
+		mediaPath = "/" + mediaPath
+	}
+
 	scanner := NewScanner(mediaPath, api.store, api.logger)
 
 	report, err := scanner.ScanLibrary(r.Context())
