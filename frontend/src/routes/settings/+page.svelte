@@ -15,6 +15,12 @@
 	let newDestination = $state('');
 	let savingDestination = $state(false);
 	let destinationMessage = $state('');
+	let mediaPath = $state('');
+	let newMediaPath = $state('');
+	let savingMediaPath = $state(false);
+	let mediaPathMessage = $state('');
+	let clearingDatabase = $state(false);
+	let clearDatabaseMessage = $state('');
 
 	async function readError(res, fallback) {
 		try {
@@ -27,12 +33,20 @@
 
 	onMount(async () => {
 		try {
-			const res = await authFetch('/api/settings/hardlink-dest');
-			if (!res.ok) throw new Error(await readError(res, 'Failed to load hard link destination'));
+			const [hardlinkRes, mediaPathRes] = await Promise.all([
+				authFetch('/api/settings/hardlink-dest'),
+				authFetch('/api/settings/media-path')
+			]);
+			
+			if (!hardlinkRes.ok) throw new Error(await readError(hardlinkRes, 'Failed to load hard link destination'));
+			const hardlinkData = await hardlinkRes.json();
+			hardLinkDestination = hardlinkData?.destination || '';
+			newDestination = hardlinkData?.destination || '';
 
-			const data = await res.json();
-			hardLinkDestination = data?.destination || '';
-			newDestination = data?.destination || '';
+			if (!mediaPathRes.ok) throw new Error(await readError(mediaPathRes, 'Failed to load media path'));
+			const mediaPathData = await mediaPathRes.json();
+			mediaPath = mediaPathData?.path || '';
+			newMediaPath = mediaPathData?.path || '';
 		} catch (err) {
 			destinationMessage = `Error: ${err.message}`;
 		}
@@ -139,6 +153,51 @@
 			destinationMessage = `Error: ${err.message}`;
 		} finally {
 			savingDestination = false;
+		}
+	}
+
+	async function saveMediaPath() {
+		if (savingMediaPath) return;
+		savingMediaPath = true;
+		mediaPathMessage = '';
+
+		try {
+			const res = await authFetch('/api/settings/media-path', {
+				method: 'POST',
+				body: JSON.stringify({
+					path: newMediaPath.trim()
+				})
+			});
+
+			if (!res.ok) throw new Error(await readError(res, 'Failed to save media path'));
+
+			const data = await res.json();
+			mediaPath = data?.path || '';
+			newMediaPath = data?.path || '';
+			mediaPathMessage = 'Media path updated successfully.';
+		} catch (err) {
+			mediaPathMessage = `Error: ${err.message}`;
+		} finally {
+			savingMediaPath = false;
+		}
+	}
+
+	async function clearDatabase() {
+		if (clearingDatabase) return;
+		if (!confirm('Are you sure you want to clear the library database? This will remove all video metadata but will not delete any files.')) {
+			return;
+		}
+		clearingDatabase = true;
+		clearDatabaseMessage = '';
+
+		try {
+			const res = await authFetch('/api/admin/clear-database', { method: 'POST' });
+			if (!res.ok) throw new Error(await readError(res, 'Failed to clear database'));
+			clearDatabaseMessage = 'Database cleared successfully. Refresh the page to see changes.';
+		} catch (err) {
+			clearDatabaseMessage = `Error: ${err.message}`;
+		} finally {
+			clearingDatabase = false;
 		}
 	}
 </script>
@@ -294,6 +353,76 @@
 			{#if thumbMessage}
 				<p class="text-xs tracking-wide {thumbMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
 					{thumbMessage}
+				</p>
+			{/if}
+		</section>
+		<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
+			<div>
+				<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Media Path</h2>
+				<p class="text-xs text-neutral-500">Configure the path to scan for media files.</p>
+			</div>
+
+			<div class="w-full grid gap-4">
+				<div class="grid gap-2">
+					<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Current Path</span>
+					<p class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm text-neutral-300">
+						{mediaPath || 'Not configured'}
+					</p>
+				</div>
+
+				<label class="grid gap-2 w-full">
+					<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Media Path</span>
+					<input
+						type="text"
+						bind:value={newMediaPath}
+						placeholder="/path/to/media"
+						class="w-full border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500"
+					/>
+				</label>
+			</div>
+
+			<button
+				onclick={saveMediaPath}
+				disabled={savingMediaPath}
+				class="mt-2 bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
+			>
+				{#if savingMediaPath}
+					<span class="loading loading-spinner loading-xs"></span>
+					Saving...
+				{:else}
+					Save Media Path
+				{/if}
+			</button>
+
+			{#if mediaPathMessage}
+				<p class="text-xs tracking-wide {mediaPathMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
+					{mediaPathMessage}
+				</p>
+			{/if}
+		</section>
+
+		<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
+			<div>
+				<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Database</h2>
+				<p class="text-xs text-neutral-500">Clear the library database. This removes all video metadata but keeps your files.</p>
+			</div>
+
+			<button
+				onclick={clearDatabase}
+				disabled={clearingDatabase}
+				class="mt-2 bg-red-900 text-white hover:bg-red-800 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
+			>
+				{#if clearingDatabase}
+					<span class="loading loading-spinner loading-xs"></span>
+					Clearing...
+				{:else}
+					Clear Database
+				{/if}
+			</button>
+
+			{#if clearDatabaseMessage}
+				<p class="text-xs tracking-wide {clearDatabaseMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
+					{clearDatabaseMessage}
 				</p>
 			{/if}
 		</section>

@@ -11,3 +11,4 @@ services:
       - MEDIA_PATH=/media
       - DB_PATH=/data/collectarr.db
       - PORT=8090
+      - AUTO_SCAN=true
