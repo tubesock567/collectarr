@@ -50,6 +50,8 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 	}
 
 	s.logger.Info("starting media scan", "media_path", s.mediaPath)
+	fileCount := 0
+	lastLogTime := time.Now()
 
 	err = filepath.WalkDir(s.mediaPath, func(path string, d os.DirEntry, walkErr error) error {
 		if walkErr != nil {
@@ -69,6 +71,13 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 		}
 
 		report.FilesFound++
+		fileCount++
+
+		if fileCount%10 == 0 || time.Since(lastLogTime) > 5*time.Second {
+			s.logger.Info("scanning progress", "files_found", report.FilesFound, "current_file", d.Name())
+			lastLogTime = time.Now()
+		}
+
 		resolvedPath, err := filepath.Abs(path)
 		if err != nil {
 			s.logger.Error("resolve absolute path", "path", path, "error", err)
@@ -92,6 +101,8 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 		return report, fmt.Errorf("scan media library: %w", err)
 	}
 
+	s.logger.Info("processing videos", "total_files", report.FilesFound, "unique_titles", len(groupedVideos))
+
 	for _, videos := range groupedVideos {
 		for _, video := range videos {
 			existing, err := s.store.GetVideoByPath(video.Path)
@@ -106,7 +117,10 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 					return report, err
 				}
 				report.Updated++
-				s.logger.Info("updated scanned video", "path", video.Path, "title", video.Title, "quality", video.Quality)
+
+				if report.Updated%10 == 0 {
+					s.logger.Info("updating progress", "updated", report.Updated, "current_title", video.Title)
+				}
 			case errors.Is(err, sql.ErrNoRows):
 				if err := s.store.InsertVideo(video); err != nil {
 					if s.store.IsUniqueFilenameError(err) {
@@ -117,7 +131,10 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 					return report, err
 				}
 				report.Inserted++
-				s.logger.Info("added scanned video", "path", video.Path, "title", video.Title, "quality", video.Quality)
+
+				if report.Inserted%10 == 0 {
+					s.logger.Info("inserting progress", "inserted", report.Inserted, "current_title", video.Title)
+				}
 			default:
 				return report, err
 			}
@@ -177,7 +194,7 @@ func probeDurationSeconds(ctx context.Context, path string, logger *slog.Logger)
 		return 0
 	}
 
-	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(
@@ -191,7 +208,6 @@ func probeDurationSeconds(ctx context.Context, path string, logger *slog.Logger)
 
 	output, err := cmd.Output()
 	if err != nil {
-		logger.Warn("ffprobe failed", "path", path, "error", err)
 		return 0
 	}
 
@@ -202,7 +218,6 @@ func probeDurationSeconds(ctx context.Context, path string, logger *slog.Logger)
 
 	seconds, err := strconv.ParseFloat(value, 64)
 	if err != nil {
-		logger.Warn("invalid ffprobe duration", "path", path, "value", value, "error", err)
 		return 0
 	}
 
@@ -214,7 +229,7 @@ func probeResolution(ctx context.Context, path string, logger *slog.Logger) stri
 		return ""
 	}
 
-	probeCtx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	probeCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
 	defer cancel()
 
 	cmd := exec.CommandContext(
@@ -229,7 +244,6 @@ func probeResolution(ctx context.Context, path string, logger *slog.Logger) stri
 
 	output, err := cmd.Output()
 	if err != nil {
-		logger.Warn("ffprobe resolution detection failed", "path", path, "error", err)
 		return ""
 	}
 
@@ -245,7 +259,6 @@ func probeResolution(ctx context.Context, path string, logger *slog.Logger) stri
 
 	height, err := strconv.Atoi(parts[1])
 	if err != nil {
-		logger.Warn("invalid height value", "path", path, "value", parts[1], "error", err)
 		return ""
 	}
 
