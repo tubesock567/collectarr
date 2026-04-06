@@ -5,7 +5,7 @@ services:
       - "8893:8090"
     volumes:
       - ./data:/data
-      - /data:/media
+      - /data/media:/media
       - /data/media/other/collectarr:/hardlink_destination
       - ./frontend/build:/app/frontend/build:ro
     environment:
