@@ -35,23 +35,25 @@ var browseableVideoExtensions = map[string]struct{}{
 }
 
 type API struct {
-	store    *Store
-	scanner  *Scanner
-	logger   *slog.Logger
-	rngMu    sync.Mutex
-	rngSeed  int64
-	thumbWg  sync.WaitGroup
-	sessMu   sync.RWMutex
-	sessions map[string]string
+	store        *Store
+	scanner      *Scanner
+	hardlinkRoot string
+	logger       *slog.Logger
+	rngMu        sync.Mutex
+	rngSeed      int64
+	thumbWg      sync.WaitGroup
+	sessMu       sync.RWMutex
+	sessions     map[string]string
 }
 
-func NewAPI(store *Store, scanner *Scanner, logger *slog.Logger) *API {
+func NewAPI(store *Store, scanner *Scanner, hardlinkRoot string, logger *slog.Logger) *API {
 	return &API{
-		store:    store,
-		scanner:  scanner,
-		logger:   logger,
-		rngSeed:  time.Now().UnixNano(),
-		sessions: map[string]string{},
+		store:        store,
+		scanner:      scanner,
+		hardlinkRoot: filepath.Clean(hardlinkRoot),
+		logger:       logger,
+		rngSeed:      time.Now().UnixNano(),
+		sessions:     map[string]string{},
 	}
 }
 
@@ -68,6 +70,7 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/videos/{id:[0-9]+}", api.authMiddleware(http.HandlerFunc(api.handleGetVideo))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/scan", api.authMiddleware(http.HandlerFunc(api.handleScan))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/directory", api.authMiddleware(http.HandlerFunc(api.handleDirectoryListing))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/hardlink-directory", api.authMiddleware(http.HandlerFunc(api.handleHardlinkDirectoryListing))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/hardlink", api.authMiddleware(http.HandlerFunc(api.handleCreateHardlinks))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/settings/hardlink-dest", api.authMiddleware(http.HandlerFunc(api.handleGetHardlinkDestination))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/settings/hardlink-dest", api.authMiddleware(http.HandlerFunc(api.handleSetHardlinkDestination))).Methods(http.MethodPost, http.MethodOptions)
@@ -252,13 +255,21 @@ func (api *API) handleScan(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *API) handleDirectoryListing(w http.ResponseWriter, r *http.Request) {
+	api.handleDirectoryListingForRoot(w, r, api.scanner.mediaPath)
+}
+
+func (api *API) handleHardlinkDirectoryListing(w http.ResponseWriter, r *http.Request) {
+	api.handleDirectoryListingForRoot(w, r, api.hardlinkRoot)
+}
+
+func (api *API) handleDirectoryListingForRoot(w http.ResponseWriter, r *http.Request, rootPath string) {
 	relPath, err := normalizeRelativeMediaPath(r.URL.Query().Get("path"))
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
 		return
 	}
 
-	dirPath, err := api.resolveMediaPath(relPath)
+	dirPath, err := resolvePathUnderRoot(rootPath, relPath)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: err.Error()})
 		return
@@ -359,7 +370,7 @@ func (api *API) handleCreateHardlinks(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	destinationPath, err := api.resolveMediaPath(destinationRelPath)
+	destinationPath, err := resolvePathUnderRoot(api.hardlinkRoot, destinationRelPath)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid destinationDir"})
 		return
@@ -423,7 +434,14 @@ func (api *API) handleGetHardlinkDestination(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	writeJSON(w, http.StatusOK, HardlinkDestinationResponse{Destination: filepath.ToSlash(destination)})
+	normalizedDestination, err := api.normalizeHardlinkDestinationSetting(destination)
+	if err != nil {
+		api.logger.Warn("ignoring invalid hardlink destination configuration", "error", err, "destination", destination)
+		writeJSON(w, http.StatusOK, HardlinkDestinationResponse{Destination: ""})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, HardlinkDestinationResponse{Destination: filepath.ToSlash(normalizedDestination)})
 }
 
 func (api *API) handleSetHardlinkDestination(w http.ResponseWriter, r *http.Request) {
@@ -433,7 +451,7 @@ func (api *API) handleSetHardlinkDestination(w http.ResponseWriter, r *http.Requ
 		return
 	}
 
-	destination, err := normalizeRelativeMediaPath(req.Destination)
+	destination, err := api.normalizeHardlinkDestinationSetting(req.Destination)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid destination"})
 		return
@@ -768,9 +786,13 @@ func normalizeRelativeMediaPath(raw string) (string, error) {
 }
 
 func (api *API) resolveMediaPath(relPath string) (string, error) {
-	mediaRoot, err := filepath.Abs(api.scanner.mediaPath)
+	return resolvePathUnderRoot(api.scanner.mediaPath, relPath)
+}
+
+func resolvePathUnderRoot(rootPath, relPath string) (string, error) {
+	mediaRoot, err := filepath.Abs(rootPath)
 	if err != nil {
-		return "", fmt.Errorf("resolve media root: %w", err)
+		return "", fmt.Errorf("resolve root path: %w", err)
 	}
 
 	targetPath, err := filepath.Abs(filepath.Join(mediaRoot, relPath))
@@ -787,6 +809,31 @@ func (api *API) resolveMediaPath(relPath string) (string, error) {
 	}
 
 	return targetPath, nil
+}
+
+func (api *API) normalizeHardlinkDestinationSetting(raw string) (string, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return "", nil
+	}
+
+	if strings.HasPrefix(raw, "/") {
+		hardlinkRoot := filepath.Clean(api.hardlinkRoot)
+		candidate := filepath.Clean(raw)
+		relPath, err := filepath.Rel(hardlinkRoot, candidate)
+		if err != nil {
+			return "", fmt.Errorf("normalize hardlink destination: %w", err)
+		}
+		if relPath == "." {
+			return "", nil
+		}
+		if relPath == ".." || strings.HasPrefix(relPath, ".."+string(filepath.Separator)) {
+			return "", errors.New("hardlink destination must be inside configured hardlink root")
+		}
+		return normalizeRelativeMediaPath(filepath.ToSlash(relPath))
+	}
+
+	return normalizeRelativeMediaPath(raw)
 }
 
 func joinRelativePath(parts ...string) string {
