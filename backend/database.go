@@ -694,6 +694,55 @@ func assignVideoTimes(video *Video, dateAdded, dateScanned sql.NullTime) {
 	}
 }
 
+func (s *Store) ListRepresentativeVideos() ([]Video, error) {
+	rows, err := s.db.Query(`
+		SELECT v.id, v.title, v.filename, v.path, v.quality, v.duration, v.tags_json, v.actors_json, v.date_added, v.date_scanned
+		FROM videos v
+		INNER JOIN (
+			SELECT title, MIN(
+				CASE quality
+					WHEN '4K' THEN 1
+					WHEN '2160p' THEN 1
+					WHEN '1080p' THEN 2
+					WHEN '720p' THEN 3
+					WHEN '480p' THEN 4
+					ELSE 5
+				END
+			) as quality_rank
+			FROM videos
+			GROUP BY title
+		) best ON v.title = best.title AND 
+			CASE v.quality
+				WHEN '4K' THEN 1
+				WHEN '2160p' THEN 1
+				WHEN '1080p' THEN 2
+				WHEN '720p' THEN 3
+				WHEN '480p' THEN 4
+				ELSE 5
+			END = best.quality_rank
+		GROUP BY v.title
+		ORDER BY v.date_added DESC, v.id DESC`)
+	if err != nil {
+		return nil, fmt.Errorf("query representative videos: %w", err)
+	}
+	defer rows.Close()
+
+	var videos []Video
+	for rows.Next() {
+		video, err := scanVideoSummary(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan representative video: %w", err)
+		}
+		videos = append(videos, video)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate representative videos: %w", err)
+	}
+
+	return videos, nil
+}
+
 func (s *Store) ListVideoGroups() ([]VideoGroup, error) {
 	rows, err := s.db.Query(`
 		SELECT id, title, filename, quality, duration, tags_json, actors_json, date_added, date_scanned

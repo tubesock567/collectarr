@@ -769,7 +769,7 @@ func (api *API) handleGeneratePreviews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	videos, err := api.store.ListVideos()
+	videos, err := api.store.ListRepresentativeVideos()
 	if err != nil {
 		api.logger.Error("failed to list videos for preview generation", "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to start preview generation"})
@@ -852,7 +852,7 @@ func (api *API) generateConfiguredPreviewAssets(parent context.Context) {
 		return
 	}
 
-	videos, err := api.store.ListVideos()
+	videos, err := api.store.ListRepresentativeVideos()
 	if err != nil {
 		api.logger.Error("failed to list videos for preview generation", "error", err)
 		return
@@ -998,7 +998,7 @@ func (api *API) currentPreviewGenerationStatus() PreviewGenerationStatus {
 func (api *API) generateAllThumbnails() {
 	api.logger.Info("starting bulk thumbnail generation")
 
-	videos, err := api.store.ListVideos()
+	videos, err := api.store.ListRepresentativeVideos()
 	if err != nil {
 		api.logger.Error("failed to list videos for thumbnails", "error", err)
 		return
