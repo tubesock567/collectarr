@@ -14,6 +14,14 @@
 	let paused = $state(true);
 	let volume = $state(1);
 	let muted = $state(false);
+	let previewEnabled = $state(true);
+	let previewLoading = $state(false);
+	let previewData = $state(null);
+	let previewError = $state(null);
+	let hoverPercent = $state(0);
+	let hoverTime = $state(0);
+	let hoverPreviewIndex = $state(-1);
+	let showingPreview = $state(false);
 	
 	let showControls = $state(true);
 	let hideTimer = null;
@@ -109,6 +117,35 @@
 		if (videoEl) videoEl.currentTime = pos * duration;
 	}
 
+	function nearestPreviewIndex(time) {
+		if (!previewData?.timestamps?.length) return -1;
+		let bestIndex = 0;
+		let bestDiff = Math.abs(previewData.timestamps[0] - time);
+		for (let i = 1; i < previewData.timestamps.length; i += 1) {
+			const diff = Math.abs(previewData.timestamps[i] - time);
+			if (diff < bestDiff) {
+				bestDiff = diff;
+				bestIndex = i;
+			}
+		}
+		return bestIndex;
+	}
+
+	function handleSeekHover(e) {
+		if (!previewEnabled || !previewData || !duration) return;
+		const rect = e.currentTarget.getBoundingClientRect();
+		const pos = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
+		hoverPercent = pos * 100;
+		hoverTime = pos * duration;
+		hoverPreviewIndex = nearestPreviewIndex(hoverTime);
+		showingPreview = hoverPreviewIndex >= 0;
+	}
+
+	function clearSeekHover() {
+		showingPreview = false;
+		hoverPreviewIndex = -1;
+	}
+
 	function formatTime(seconds) {
 		if (isNaN(seconds)) return '0:00';
 		const mins = Math.floor(seconds / 60);
@@ -118,6 +155,30 @@
 
 	function updateSelectedVariant(id) {
 		selectedVariantId = Number(id);
+	}
+
+	async function loadPreviewData(variantId) {
+		if (!variantId) return;
+		previewLoading = true;
+		previewError = null;
+		previewData = null;
+		clearSeekHover();
+		try {
+			const res = await authFetch(`/api/video/${variantId}/preview`);
+			if (res.status === 501) {
+				previewData = null;
+				previewEnabled = false;
+				return;
+			}
+			if (!res.ok) throw new Error('Failed to load preview data');
+			previewData = await res.json();
+		} catch (err) {
+			previewError = err.message;
+			previewData = null;
+			previewEnabled = false;
+		} finally {
+			previewLoading = false;
+		}
 	}
 
 	let videoSrc = $derived(selectedVariantId ? `/api/video/${selectedVariantId}/stream` : '');
@@ -139,6 +200,12 @@
 	onDestroy(() => {
 		if (hideTimer) clearTimeout(hideTimer);
 	});
+
+	$effect(() => {
+		if (selectedVariantId) {
+			loadPreviewData(selectedVariantId);
+		}
+	});
 	
 	$effect(() => {
 		if (paused) {
@@ -150,6 +217,13 @@
 	});
 
 	let progress = $derived(duration > 0 ? (currentTime / duration) * 100 : 0);
+	let previewBackgroundPosition = $derived.by(() => {
+		if (!previewData || hoverPreviewIndex < 0) return '0px 0px';
+		const column = hoverPreviewIndex % previewData.columns;
+		const row = Math.floor(hoverPreviewIndex / previewData.columns);
+		return `${-column * previewData.frameWidth}px ${-row * previewData.frameHeight}px`;
+	});
+	let previewBackgroundSize = $derived(previewData ? `${previewData.columns * previewData.frameWidth}px ${previewData.rows * previewData.frameHeight}px` : 'auto');
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -224,7 +298,20 @@
 		<div 
 			class="w-full h-2 bg-white/20 cursor-pointer group hover:h-3 transition-all relative"
 			onclick={seek}
+			onmousemove={handleSeekHover}
+			onmouseleave={clearSeekHover}
 		>
+			{#if showingPreview && previewData}
+				<div class="absolute bottom-full mb-4 -translate-x-1/2 pointer-events-none" style="left: {hoverPercent}%">
+					<div class="border border-white/20 bg-black/80 p-2 backdrop-blur-sm">
+						<div
+							class="bg-black"
+							style="width: 180px; height: {180 * (previewData.frameHeight / previewData.frameWidth)}px; background-image: url('{previewData.sprite_url}'); background-position: {previewBackgroundPosition}; background-size: {previewBackgroundSize};"
+						></div>
+						<p class="mt-2 text-center text-[10px] uppercase tracking-[0.2em] text-white/70">{formatTime(hoverTime)}</p>
+					</div>
+				</div>
+			{/if}
 				<div 
 					class="absolute top-0 left-0 h-full bg-white will-change-[width]"
 					style="width: {progress}%"
@@ -259,6 +346,17 @@
 			</div>
 
 			<div class="flex items-center gap-6">
+				<label class="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/70">
+					<span>Preview</span>
+					<button
+						type="button"
+						onclick={() => previewEnabled = !previewEnabled}
+						class="border border-white/20 px-3 py-2 text-white transition-colors hover:border-white/50 {previewEnabled ? 'bg-white text-black' : 'bg-black/50'}"
+					>
+						{previewLoading ? 'Loading' : (previewEnabled && previewData ? 'On' : 'Off')}
+					</button>
+				</label>
+
 				{#if video?.variants?.length > 1}
 					<label class="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/70">
 						<span>Quality</span>
