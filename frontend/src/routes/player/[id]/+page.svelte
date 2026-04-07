@@ -404,15 +404,15 @@
 		<track kind="captions" />
 	</video>
 
-	<div class="absolute inset-y-0 right-0 z-40 w-full max-w-sm border-l border-white/10 bg-black/90 backdrop-blur-md transition-transform duration-300 {showInfoPanel ? 'translate-x-0' : 'translate-x-full'}">
+	<div class="absolute inset-y-0 right-0 z-40 w-full max-w-md border-l border-neutral-800 bg-black/95 shadow-2xl backdrop-blur transition-transform duration-300 {showInfoPanel ? 'translate-x-0' : 'translate-x-full'}">
 		<div class="flex h-full flex-col">
-			<div class="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
+			<div class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5">
 				<div>
-					<p class="text-[10px] uppercase tracking-[0.3em] text-white/50">Video Details</p>
+					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Video Details</p>
 					<h2 class="mt-2 text-lg font-semibold text-white">{video?.title || 'Unknown title'}</h2>
 				</div>
 				<button
-					class="mt-0.5 text-white/50 hover:text-white transition-colors"
+					class="mt-0.5 text-neutral-400 hover:text-white transition-colors"
 					aria-label="Close video details"
 					onclick={() => showInfoPanel = false}
 				>
@@ -423,76 +423,76 @@
 			</div>
 
 			<div class="flex-1 space-y-6 overflow-y-auto px-6 py-5 text-sm text-white/80">
-				<div class="grid gap-4">
+				<div class="grid gap-4 border border-neutral-800 bg-neutral-950/60 p-4">
 					<div>
-						<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Duration</p>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Duration</p>
 						<p class="mt-2 text-white">{formatTime(video?.duration || 0)}</p>
 					</div>
 					<div>
-						<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Date Added</p>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Date Added</p>
 						<p class="mt-2 text-white">{formatDate(video?.date_added)}</p>
 					</div>
 					<div>
-						<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Last Scanned</p>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Last Scanned</p>
 						<p class="mt-2 text-white">{formatDate(video?.date_scanned)}</p>
 					</div>
-				<div>
-					<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Current Quality</p>
-					<p class="mt-2 text-white">{video?.variants?.find((variant) => variant.id === selectedVariantId)?.quality || 'Original'}</p>
+					<div>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Current Quality</p>
+						<p class="mt-2 text-white">{video?.variants?.find((variant) => variant.id === selectedVariantId)?.quality || 'Original'}</p>
+					</div>
 				</div>
-			</div>
 
-				<div class="space-y-4 border-t border-white/10 pt-6">
-				<MetadataTokenInput
-					label="Tags"
-					values={tagsDraft}
-					suggestions={metadataOptions.tags}
-					placeholder="Type to add or select tags"
-					helpText="Type to filter existing tags, then press Enter, Tab, or comma to add one."
-					disabled={savingMetadata}
-					onChange={handleTagsChange}
-				/>
-
-				<MetadataTokenInput
-					label="Actors / Actresses"
-					values={actorsDraft}
-					suggestions={metadataOptions.actors}
-					placeholder="Type to add or select actors"
-					helpText="Pick existing names from the list or add new ones as chips. Changes apply to all variants with this title."
-					disabled={savingMetadata}
-					onChange={handleActorsChange}
-				/>
-
-				<div class="flex items-center gap-3">
-					<button
-						class="border border-white/20 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-black transition-colors hover:bg-white/85 disabled:border-white/10 disabled:bg-white/10 disabled:text-white/35"
-						onclick={saveMetadata}
+				<div class="space-y-4 border-t border-neutral-800 pt-6">
+					<MetadataTokenInput
+						label="Tags"
+						values={tagsDraft}
+						suggestions={metadataOptions.tags}
+						placeholder="Type to add or select tags"
+						helpText="Type to filter existing tags, then press Enter, Tab, or comma to add one."
 						disabled={savingMetadata}
-					>
-						{#if savingMetadata}
-							Saving...
-						{:else}
-							Save Details
-						{/if}
-					</button>
-					{#if metadataMessage}
-						<p class="text-xs text-white/55">{metadataMessage}</p>
-					{/if}
-				</div>
-			</div>
+						onChange={handleTagsChange}
+					/>
 
-			<div>
-				<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Available Variants</p>
+					<MetadataTokenInput
+						label="Actors / Actresses"
+						values={actorsDraft}
+						suggestions={metadataOptions.actors}
+						placeholder="Type to add or select actors"
+						helpText="Pick existing names from the list or add new ones as chips. Changes apply to all variants with this title."
+						disabled={savingMetadata}
+						onChange={handleActorsChange}
+					/>
+
+					<div class="flex items-center gap-3">
+						<button
+							class="border border-white bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-black transition-colors hover:bg-white/85 disabled:border-neutral-700 disabled:bg-neutral-800 disabled:text-neutral-500"
+							onclick={saveMetadata}
+							disabled={savingMetadata}
+						>
+							{#if savingMetadata}
+								Saving...
+							{:else}
+								Save Details
+							{/if}
+						</button>
+						{#if metadataMessage}
+							<p class="text-xs text-neutral-400">{metadataMessage}</p>
+						{/if}
+					</div>
+				</div>
+
+				<div>
+					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Available Variants</p>
 					<div class="mt-3 space-y-2">
 						{#each video?.variants || [] as variant (variant.id)}
-							<div class="border border-white/10 bg-white/5 px-4 py-3">
+							<div class="border border-neutral-800 bg-neutral-950/60 px-4 py-3">
 								<div class="flex items-start justify-between gap-3">
 									<div>
 										<p class="text-white">{variant.quality || 'Original'}</p>
-										<p class="mt-1 break-all text-xs text-white/45">{variant.filename}</p>
+										<p class="mt-1 break-all text-xs text-neutral-400">{variant.filename}</p>
 									</div>
 									{#if variant.id === selectedVariantId}
-										<span class="border border-white/20 px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-white/60">Playing</span>
+										<span class="border border-neutral-700 px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-neutral-400">Playing</span>
 									{/if}
 								</div>
 							</div>
