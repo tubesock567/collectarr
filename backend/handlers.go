@@ -831,9 +831,12 @@ func (api *API) ensureHoverPreview(parent context.Context, video Video) (string,
 		return previewPath, nil
 	}
 
-	const segmentCount = 4
+	segmentCount := 4
 	const segmentDuration = 1.5
-	timestamps := api.samplePreviewTimestamps(video.Duration, segmentCount)
+	if video.Duration > 0 {
+		segmentCount = max(1, min(segmentCount, int(math.Ceil(float64(video.Duration)/segmentDuration))))
+	}
+	timestamps := sampleHoverPreviewStartTimes(video.Duration, segmentCount, segmentDuration)
 	tempDir, err := os.MkdirTemp(previewDir, fmt.Sprintf("hover-%d-*", video.ID))
 	if err != nil {
 		return "", fmt.Errorf("create hover preview temp dir: %w", err)
@@ -904,7 +907,7 @@ func hoverPreviewCacheDir() string {
 }
 
 func hoverPreviewFilePath(videoID int64) string {
-	return filepath.Join(hoverPreviewCacheDir(), fmt.Sprintf("%d.mp4", videoID))
+	return filepath.Join(hoverPreviewCacheDir(), fmt.Sprintf("%d-v3.mp4", videoID))
 }
 
 func generatePreviewFrame(parent context.Context, ffmpegPath, videoPath, outputPath string, timestamp float64, width, height int) error {
@@ -971,6 +974,35 @@ func (api *API) samplePreviewTimestamps(duration, count int) []float64 {
 		timestamps = append(timestamps, minTime+(float64(i)*step))
 	}
 	return timestamps
+}
+
+func sampleHoverPreviewStartTimes(duration, count int, segmentDuration float64) []float64 {
+	if count <= 0 {
+		return nil
+	}
+
+	if duration <= 0 {
+		starts := make([]float64, 0, count)
+		for i := 0; i < count; i++ {
+			starts = append(starts, float64(i)*segmentDuration)
+		}
+		return starts
+	}
+
+	maxStart := math.Max(0, float64(duration)-segmentDuration)
+	if count == 1 {
+		return []float64{maxStart / 2}
+	}
+
+	starts := make([]float64, 0, count)
+	step := 0.0
+	if count > 1 {
+		step = maxStart / float64(count-1)
+	}
+	for i := 0; i < count; i++ {
+		starts = append(starts, float64(i)*step)
+	}
+	return starts
 }
 
 func readPreviewMetadata(path string) (PreviewSpriteResponse, error) {

@@ -182,7 +182,16 @@
 				return;
 			}
 			if (!res.ok) throw new Error('Failed to load preview data');
-			previewData = await res.json();
+			const data = await res.json();
+			previewData = {
+				...data,
+				sprite_url: data.sprite_url,
+				frameWidth: data.frame_width,
+				frameHeight: data.frame_height,
+				columns: data.columns,
+				rows: data.rows,
+				timestamps: data.timestamps || []
+			};
 		} catch (err) {
 			previewError = err.message;
 			previewData = null;
@@ -230,6 +239,7 @@
 	let progress = $derived(duration > 0 ? (currentTime / duration) * 100 : 0);
 	const previewDisplayWidth = 180;
 	let previewDisplayHeight = $derived(previewData ? previewDisplayWidth * (previewData.frameHeight / previewData.frameWidth) : 0);
+	let previewLeft = $derived(`clamp(${previewDisplayWidth / 2}px, ${hoverPercent}%, calc(100% - ${previewDisplayWidth / 2}px))`);
 	let previewBackgroundPosition = $derived.by(() => {
 		if (!previewData || hoverPreviewIndex < 0) return '0px 0px';
 		const column = hoverPreviewIndex % previewData.columns;
@@ -247,7 +257,7 @@
 <!-- svelte-ignore a11y_no_static_element_interactions -->
 <div 
 	bind:this={containerEl}
-	class="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center overflow-hidden"
+	class="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center"
 	onmousemove={resetTimer}
 	onmouseleave={() => { if (!paused) showControls = false; }}
 >
@@ -315,7 +325,7 @@
 			onmouseleave={clearSeekHover}
 		>
 			{#if showingPreview && previewData}
-				<div class="absolute bottom-full mb-4 -translate-x-1/2 pointer-events-none" style="left: {hoverPercent}%">
+				<div class="absolute bottom-full mb-4 -translate-x-1/2 pointer-events-none" style="left: {previewLeft}">
 					<div class="border border-white/20 bg-black/80 p-2 backdrop-blur-sm">
 						<div
 							data-scrubber-preview="true"
