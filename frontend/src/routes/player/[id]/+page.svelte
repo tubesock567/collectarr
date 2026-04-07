@@ -520,6 +520,10 @@
 		</div>
 	{/if}
 
+	<div class="absolute top-20 left-6 z-30 transition-opacity duration-300 {showControls ? 'opacity-100' : 'opacity-0'}">
+		<h1 class="text-white text-xl font-semibold drop-shadow-lg max-w-md truncate">{video?.title || 'Unknown title'}</h1>
+	</div>
+
 	<div 
 		class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-12 transition-opacity duration-300 {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}"
 	>
