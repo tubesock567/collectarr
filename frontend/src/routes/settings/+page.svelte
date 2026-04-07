@@ -18,10 +18,14 @@
 	let newMediaPath = $state('');
 	let savingMediaPath = $state(false);
 	let mediaPathMessage = $state('');
-	let generateScrubberSprites = $state(false);
-	let generateHoverPreviews = $state(false);
+	let selectedThumbnails = $state(false);
+	let selectedScrubberSprites = $state(false);
+	let selectedHoverPreviews = $state(false);
+	let selectedAutoGenerate = $state(false);
 	let generatingPreviews = $state(false);
 	let previewGenMessage = $state('');
+	let savingGenerationSettings = $state(false);
+	let generationSettingsMessage = $state('');
 	let clearingDatabase = $state(false);
 	let clearDatabaseMessage = $state('');
 	let showMediaBrowser = $state(false);
@@ -48,8 +52,10 @@
 
 			if (!generationRes.ok) throw new Error(await readError(generationRes, 'Failed to load generation settings'));
 			const generationData = await generationRes.json();
-			generateScrubberSprites = Boolean(generationData?.generate_scrubber_sprites);
-			generateHoverPreviews = Boolean(generationData?.generate_hover_previews);
+			selectedThumbnails = Boolean(generationData?.generate_thumbnails);
+			selectedScrubberSprites = Boolean(generationData?.generate_scrubber_sprites);
+			selectedHoverPreviews = Boolean(generationData?.generate_hover_previews);
+			selectedAutoGenerate = Boolean(generationData?.auto_generate_during_scan);
 		} catch (err) {
 			mediaPathMessage = `Error: ${err.message}`;
 		}
@@ -159,13 +165,49 @@
 		}
 	}
 
+	async function saveGenerationSettings() {
+		if (savingGenerationSettings) return;
+		savingGenerationSettings = true;
+		generationSettingsMessage = '';
+
+		try {
+			const res = await authFetch('/api/settings/generation', {
+				method: 'POST',
+				body: JSON.stringify({
+					generate_thumbnails: selectedThumbnails,
+					generate_scrubber_sprites: selectedScrubberSprites,
+					generate_hover_previews: selectedHoverPreviews,
+					auto_generate_during_scan: selectedAutoGenerate
+				})
+			});
+
+			if (!res.ok) throw new Error(await readError(res, 'Failed to save generation settings'));
+			generationSettingsMessage = 'Generation settings updated successfully.';
+		} catch (err) {
+			generationSettingsMessage = `Error: ${err.message}`;
+		} finally {
+			savingGenerationSettings = false;
+		}
+	}
+
 	async function generatePreviews() {
 		if (generatingPreviews) return;
+		if (!selectedThumbnails && !selectedScrubberSprites && !selectedHoverPreviews) {
+			previewGenMessage = 'Select at least one preview option to generate.';
+			return;
+		}
 		generatingPreviews = true;
 		previewGenMessage = '';
 
 		try {
-			const res = await authFetch('/api/previews/generate', { method: 'POST' });
+			const res = await authFetch('/api/previews/generate', {
+				method: 'POST',
+				body: JSON.stringify({
+					generate_thumbnails: selectedThumbnails,
+					generate_scrubber_sprites: selectedScrubberSprites,
+					generate_hover_previews: selectedHoverPreviews
+				})
+			});
 			if (!res.ok) throw new Error(await readError(res, 'Failed to start preview generation'));
 			await res.json();
 			previewGenMessage = 'Preview generation started. This may take a while...';
@@ -337,9 +379,39 @@
 							<p class="text-sm text-white uppercase tracking-widest">Auto-generate during scans</p>
 							<p class="text-xs text-neutral-500 mt-1">Automatically generate preview assets when scanning the library.</p>
 						</div>
-						<input type="checkbox" bind:checked={generateScrubberSprites} class="toggle toggle-sm rounded-none" />
+						<input type="checkbox" bind:checked={selectedAutoGenerate} onchange={saveGenerationSettings} class="toggle toggle-sm rounded-none" />
+					</label>
+
+					<label class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3">
+						<div>
+							<p class="text-sm text-white uppercase tracking-widest">Generate thumbnails</p>
+							<p class="text-xs text-neutral-500 mt-1">Include thumbnails when generating previews.</p>
+						</div>
+						<input type="checkbox" bind:checked={selectedThumbnails} onchange={saveGenerationSettings} class="toggle toggle-sm rounded-none" />
+					</label>
+
+					<label class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3">
+						<div>
+							<p class="text-sm text-white uppercase tracking-widest">Generate scrubber sprites</p>
+							<p class="text-xs text-neutral-500 mt-1">Include scrubber sprite sheets when generating previews.</p>
+						</div>
+						<input type="checkbox" bind:checked={selectedScrubberSprites} onchange={saveGenerationSettings} class="toggle toggle-sm rounded-none" />
+					</label>
+
+					<label class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3">
+						<div>
+							<p class="text-sm text-white uppercase tracking-widest">Generate hover previews</p>
+							<p class="text-xs text-neutral-500 mt-1">Include hover previews when generating previews.</p>
+						</div>
+						<input type="checkbox" bind:checked={selectedHoverPreviews} onchange={saveGenerationSettings} class="toggle toggle-sm rounded-none" />
 					</label>
 				</div>
+
+				{#if generationSettingsMessage}
+					<p class="text-xs tracking-wide {generationSettingsMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'}">
+						{generationSettingsMessage}
+					</p>
+				{/if}
 
 				<div class="w-full border-t border-neutral-800 pt-4 mt-2">
 					<p class="text-xs text-neutral-500 mb-4">Generate preview assets manually for all videos in your library.</p>
@@ -405,11 +477,7 @@
 					</p>
 				{/if}
 			</section>
-		</div>
-	{/if}
 
-	{#if activeTab === 'system'}
-		<div class="space-y-8">
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Database</h2>
@@ -435,7 +503,11 @@
 					</p>
 				{/if}
 			</section>
+		</div>
+	{/if}
 
+	{#if activeTab === 'system'}
+		<div class="space-y-8">
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">System Info</h2>
