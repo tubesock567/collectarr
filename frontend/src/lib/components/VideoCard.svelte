@@ -16,6 +16,7 @@
 	const hoverPreviewSrc = $derived(`/api/video/${video.id}/hover-preview`);
 
 	function startHover() {
+		if ($preferences.incognito) return;
 		hovered = true;
 		previewRequested = true;
 		if (previewLoaded && previewEl) {

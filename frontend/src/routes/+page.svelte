@@ -5,9 +5,36 @@
 	import { preferences } from '$lib/preferences';
 	import { theme } from '$lib/theme';
 
-	let videos = $state([]);
-	let loading = $state(true);
-	let error = $state(null);
+    let videos = $state([]);
+    let loading = $state(true);
+    let error = $state(null);
+    let sortBy = $state('dateAdded'); // 'dateAdded' | 'duration'
+    let sortOrder = $state('desc'); // 'asc' | 'desc'
+
+    const sortedVideos = $derived(() => {
+        const sorted = [...videos];
+        sorted.sort((a, b) => {
+            let valA, valB;
+            if (sortBy === 'duration') {
+                valA = a.duration || 0;
+                valB = b.duration || 0;
+            } else {
+                valA = new Date(a.date_added || 0).getTime();
+                valB = new Date(b.date_added || 0).getTime();
+            }
+            return sortOrder === 'asc' ? valA - valB : valB - valA;
+        });
+        return sorted;
+    });
+
+    function toggleSort(field) {
+        if (sortBy === field) {
+            sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+        } else {
+            sortBy = field;
+            sortOrder = 'desc';
+        }
+    }
 
 	async function readError(res, fallback) {
 		try {
@@ -39,6 +66,22 @@
 	<div class="flex justify-between items-center gap-3 mb-6">
 		<h2 class="text-sm font-semibold uppercase tracking-widest text-white">Recently added</h2>
 		<div class="flex items-center gap-3">
+			<div class="flex items-center gap-1 border border-neutral-700 rounded p-1">
+				<button
+					class="px-2 py-1 text-xs uppercase tracking-wider transition-colors {sortBy === 'dateAdded' ? 'text-white bg-neutral-700' : 'text-neutral-400 hover:text-white'}"
+					onclick={() => toggleSort('dateAdded')}
+					aria-label="Sort by date added"
+				>
+					Date {sortBy === 'dateAdded' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+				</button>
+				<button
+					class="px-2 py-1 text-xs uppercase tracking-wider transition-colors {sortBy === 'duration' ? 'text-white bg-neutral-700' : 'text-neutral-400 hover:text-white'}"
+					onclick={() => toggleSort('duration')}
+					aria-label="Sort by duration"
+				>
+					Duration {sortBy === 'duration' ? (sortOrder === 'asc' ? '↑' : '↓') : ''}
+				</button>
+			</div>
 		<button
 			class="p-2 rounded border border-neutral-700 hover:border-neutral-500 transition-colors text-neutral-400 hover:text-white"
 			aria-label={$theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
@@ -90,7 +133,7 @@
 		</div>
 	{:else}
 		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
-			{#each videos as video (video.id)}
+			{#each sortedVideos() as video (video.id)}
 				<VideoCard {video} />
 			{/each}
 		</div>
