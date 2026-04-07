@@ -17,7 +17,6 @@ func main() {
 	mediaPath := envOrDefault("MEDIA_PATH", "/media")
 	dbPath := envOrDefault("DB_PATH", "/data/collectarr.db")
 	port := envOrDefault("PORT", "8080")
-	autoScan := envOrDefault("AUTO_SCAN", "true") == "true"
 
 	store, err := NewStore(dbPath, logger)
 	if err != nil {
@@ -33,17 +32,6 @@ func main() {
 
 	scanner := NewScanner(mediaPath, store, logger)
 	api := NewAPI(store, scanner, logger)
-
-	if autoScan {
-		if report, err := scanner.ScanLibrary(context.Background()); err != nil {
-			logger.Error("startup scan failed", "error", err, "media_path", mediaPath)
-		} else {
-			logger.Info("startup scan complete", "files_found", report.FilesFound, "inserted", report.Inserted, "updated", report.Updated, "skipped", report.Skipped)
-			api.enqueueConfiguredPreviewAssets()
-		}
-	} else {
-		logger.Info("auto scan disabled, skipping startup scan")
-	}
 
 	server := &http.Server{
 		Addr:              ":" + port,
