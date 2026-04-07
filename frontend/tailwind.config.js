@@ -4,11 +4,15 @@ import daisyui from 'daisyui';
 export default {
   content: ['./src/**/*.{html,js,svelte,ts}'],
   theme: {
-    extend: {},
+    extend: {
+      screens: {
+        '3xl': '1920px',
+      },
+    },
   },
   plugins: [daisyui],
   daisyui: {
-    themes: ['black'], // Enforcing black and white only
+    themes: ['black'],
     darkTheme: 'black',
   },
 };
