@@ -1,5 +1,6 @@
 <script>
 	import { authFetch } from '$lib/auth';
+	import MetadataTokenInput from '$lib/components/MetadataTokenInput.svelte';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { onMount, onDestroy } from 'svelte';
@@ -23,8 +24,9 @@
 	let hoverPreviewIndex = $state(-1);
 	let showingPreview = $state(false);
 	let showInfoPanel = $state(false);
-	let tagsDraft = $state('');
-	let actorsDraft = $state('');
+	let tagsDraft = $state([]);
+	let actorsDraft = $state([]);
+	let metadataOptions = $state({ tags: [], actors: [] });
 	let savingMetadata = $state(false);
 	let metadataMessage = $state('');
 	
@@ -198,25 +200,36 @@
 	}
 
 	function syncMetadataDrafts(videoData) {
-		tagsDraft = (videoData?.tags || []).join(', ');
-		actorsDraft = (videoData?.actors || []).join(', ');
-	}
-
-	function parseMetadataList(value) {
-		return value
-			.split(',')
-			.map((item) => item.trim())
-			.filter(Boolean);
-	}
-
-	function handleTagsInput(event) {
-		tagsDraft = event.currentTarget.value;
+		tagsDraft = [...(videoData?.tags || [])];
+		actorsDraft = [...(videoData?.actors || [])];
 		metadataMessage = '';
 	}
 
-	function handleActorsInput(event) {
-		actorsDraft = event.currentTarget.value;
+	function handleTagsChange(nextValues) {
+		tagsDraft = nextValues;
 		metadataMessage = '';
+	}
+
+	function handleActorsChange(nextValues) {
+		actorsDraft = nextValues;
+		metadataMessage = '';
+	}
+
+	async function readError(response, fallback) {
+		try {
+			const data = await response.json();
+			return data?.error || fallback;
+		} catch {
+			return fallback;
+		}
+	}
+
+	async function loadMetadataOptions() {
+		const res = await authFetch('/api/videos/metadata/options');
+		if (!res.ok) {
+			throw new Error(await readError(res, 'Failed to load metadata options'));
+		}
+		metadataOptions = await res.json();
 	}
 
 	async function saveMetadata() {
@@ -228,14 +241,19 @@
 			const res = await authFetch(`/api/videos/${video.id}/metadata`, {
 				method: 'PUT',
 				body: JSON.stringify({
-					tags: parseMetadataList(tagsDraft),
-					actors: parseMetadataList(actorsDraft)
+					tags: tagsDraft,
+					actors: actorsDraft
 				})
 			});
-			if (!res.ok) throw new Error('Failed to save video metadata');
+			if (!res.ok) throw new Error(await readError(res, 'Failed to save video metadata'));
 			video = await res.json();
 			syncMetadataDrafts(video);
 			metadataMessage = 'Video details updated.';
+			try {
+				await loadMetadataOptions();
+			} catch {
+				metadataMessage = 'Video details updated. Suggestions could not be refreshed.';
+			}
 		} catch (err) {
 			metadataMessage = err.message;
 		} finally {
@@ -279,11 +297,16 @@
 		onMount(async () => {
 		resetTimer();
 		try {
-			const res = await authFetch(`/api/videos/${id}`);
-			if (!res.ok) throw new Error('Failed to load video');
-			video = await res.json();
+			const videoRes = await authFetch(`/api/videos/${id}`);
+			if (!videoRes.ok) throw new Error('Failed to load video');
+			video = await videoRes.json();
 			syncMetadataDrafts(video);
 			selectedVariantId = video?.variants?.[0]?.id ?? Number(id);
+			try {
+				await loadMetadataOptions();
+			} catch {
+				metadataMessage = 'Suggestions are temporarily unavailable.';
+			}
 		} catch (err) {
 			loadError = err.message;
 		} finally {
@@ -419,30 +442,26 @@
 				</div>
 			</div>
 
-			<div class="space-y-4 border-t border-white/10 pt-6">
-				<div>
-					<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Tags</p>
-					<textarea
-						value={tagsDraft}
-						oninput={handleTagsInput}
-						rows="3"
-						placeholder="e.g. drama, romance, action"
-						class="mt-3 w-full border border-white/15 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-white/25 focus:border-white/40"
-					></textarea>
-					<p class="mt-2 text-xs text-white/35">Comma separated.</p>
-				</div>
+				<div class="space-y-4 border-t border-white/10 pt-6">
+				<MetadataTokenInput
+					label="Tags"
+					values={tagsDraft}
+					suggestions={metadataOptions.tags}
+					placeholder="Type to add or select tags"
+					helpText="Type to filter existing tags, then press Enter, Tab, or comma to add one."
+					disabled={savingMetadata}
+					onChange={handleTagsChange}
+				/>
 
-				<div>
-					<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Actors / Actresses</p>
-					<textarea
-						value={actorsDraft}
-						oninput={handleActorsInput}
-						rows="4"
-						placeholder="e.g. Jane Doe, John Doe"
-						class="mt-3 w-full border border-white/15 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-white/25 focus:border-white/40"
-					></textarea>
-					<p class="mt-2 text-xs text-white/35">Comma separated.</p>
-				</div>
+				<MetadataTokenInput
+					label="Actors / Actresses"
+					values={actorsDraft}
+					suggestions={metadataOptions.actors}
+					placeholder="Type to add or select actors"
+					helpText="Pick existing names from the list or add new ones as chips. Changes apply to all variants with this title."
+					disabled={savingMetadata}
+					onChange={handleActorsChange}
+				/>
 
 				<div class="flex items-center gap-3">
 					<button
