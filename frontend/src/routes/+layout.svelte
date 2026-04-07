@@ -5,6 +5,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth, checkAuth, logout } from '$lib/auth';
+	import { preferences } from '$lib/preferences';
 	import { theme } from '$lib/theme';
 
 	let { children } = $props();
@@ -12,6 +13,7 @@
 	onMount(() => {
 		checkAuth();
 		theme.initTheme();
+		preferences.initPreferences();
 	});
 
 	$effect(() => {

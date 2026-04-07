@@ -9,6 +9,10 @@
 			document.documentElement.dataset.theme = storedTheme;
 			document.documentElement.classList.toggle('theme-light', storedTheme === 'light');
 			document.documentElement.classList.toggle('theme-dark', storedTheme !== 'light');
+			try {
+				const preferences = JSON.parse(localStorage.getItem('collectarr-preferences') || '{}');
+				document.documentElement.classList.toggle('incognito-mode', Boolean(preferences.incognito));
+			} catch {}
 		</script>
 		%sveltekit.head%
 	</head>
