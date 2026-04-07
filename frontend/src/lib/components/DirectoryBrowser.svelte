@@ -5,7 +5,6 @@
 		isOpen = $bindable(false),
 		onSelect = () => {},
 		onCancel = () => {},
-		endpoint = '/api/directory',
 		title = 'Select Directory'
 	} = $props();
 
@@ -77,7 +76,7 @@
 		message = '';
 
 		try {
-			const res = await authFetch(`${endpoint}?path=${encodeURIComponent(path)}`, { method: 'GET' });
+			const res = await authFetch(`/api/directory?path=${encodeURIComponent(path)}`, { method: 'GET' });
 			if (!res.ok) throw new Error(await readError(res, 'Failed to load directory'));
 
 			const data = await res.json();

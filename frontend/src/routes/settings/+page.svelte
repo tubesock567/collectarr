@@ -14,10 +14,6 @@
 	let confirmPassword = $state('');
 	let changingPassword = $state(false);
 	let passwordMessage = $state('');
-	let hardLinkDestination = $state('');
-	let newDestination = $state('');
-	let savingDestination = $state(false);
-	let destinationMessage = $state('');
 	let mediaPath = $state('');
 	let newMediaPath = $state('');
 	let savingMediaPath = $state(false);
@@ -25,7 +21,6 @@
 	let clearingDatabase = $state(false);
 	let clearDatabaseMessage = $state('');
 	let showMediaBrowser = $state(false);
-	let showHardlinkBrowser = $state(false);
 
 	async function readError(res, fallback) {
 		try {
@@ -38,22 +33,13 @@
 
 	onMount(async () => {
 		try {
-			const [hardlinkRes, mediaPathRes] = await Promise.all([
-				authFetch('/api/settings/hardlink-dest'),
-				authFetch('/api/settings/media-path')
-			]);
-			
-			if (!hardlinkRes.ok) throw new Error(await readError(hardlinkRes, 'Failed to load hard link destination'));
-			const hardlinkData = await hardlinkRes.json();
-			hardLinkDestination = hardlinkData?.destination || '';
-			newDestination = hardlinkData?.destination || '';
-
+			const mediaPathRes = await authFetch('/api/settings/media-path');
 			if (!mediaPathRes.ok) throw new Error(await readError(mediaPathRes, 'Failed to load media path'));
 			const mediaPathData = await mediaPathRes.json();
 			mediaPath = mediaPathData?.path || '';
 			newMediaPath = mediaPathData?.path || '';
 		} catch (err) {
-			destinationMessage = `Error: ${err.message}`;
+			mediaPathMessage = `Error: ${err.message}`;
 		}
 	});
 	
@@ -132,32 +118,6 @@
 			passwordMessage = `Error: ${err.message}`;
 		} finally {
 			changingPassword = false;
-		}
-	}
-
-	async function saveDestination() {
-		if (savingDestination) return;
-		savingDestination = true;
-		destinationMessage = '';
-
-		try {
-			const res = await authFetch('/api/settings/hardlink-dest', {
-				method: 'POST',
-				body: JSON.stringify({
-					destination: newDestination.trim()
-				})
-			});
-
-			if (!res.ok) throw new Error(await readError(res, 'Failed to save hard link destination'));
-
-			const data = await res.json();
-			hardLinkDestination = data?.destination || '';
-			newDestination = data?.destination || '';
-			destinationMessage = 'Hard link destination updated successfully.';
-		} catch (err) {
-			destinationMessage = `Error: ${err.message}`;
-		} finally {
-			savingDestination = false;
 		}
 	}
 
@@ -336,60 +296,6 @@
 
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
-					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Hard Link Settings</h2>
-					<p class="text-xs text-neutral-500">Configure the destination directory for hard linking files.</p>
-				</div>
-
-				<div class="w-full grid gap-4">
-					<div class="grid gap-2">
-						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Current Destination</span>
-						<p class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm text-neutral-300">
-							{hardLinkDestination || 'Not configured'}
-						</p>
-					</div>
-
-					<div class="grid gap-2 w-full">
-						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">New Destination</span>
-						<div class="flex gap-2">
-							<input
-								type="text"
-								bind:value={newDestination}
-								placeholder="Click Browse to select directory"
-								readonly
-								class="flex-1 border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500 text-sm"
-							/>
-							<button
-								onclick={() => showHardlinkBrowser = true}
-								class="bg-neutral-800 text-white hover:bg-neutral-700 font-bold uppercase tracking-widest text-xs px-4 py-3 transition-colors"
-							>
-								Browse
-							</button>
-						</div>
-					</div>
-				</div>
-
-				<button
-					onclick={saveDestination}
-					disabled={savingDestination}
-					class="mt-2 bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
-				>
-					{#if savingDestination}
-						<span class="loading loading-spinner loading-xs"></span>
-						Saving...
-					{:else}
-						Save Destination
-					{/if}
-				</button>
-
-				{#if destinationMessage}
-					<p class="text-xs tracking-wide {destinationMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
-						{destinationMessage}
-					</p>
-				{/if}
-			</section>
-
-			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
-				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Library Management</h2>
 					<p class="text-xs text-neutral-500">Trigger a manual rescan of your media directory to discover new files.</p>
 				</div>
@@ -482,14 +388,6 @@
 
 <DirectoryBrowser
 	bind:isOpen={showMediaBrowser}
-	endpoint="/api/directory"
 	title="Select Media Path"
 	onSelect={(path) => { newMediaPath = path; }}
-/>
-
-<DirectoryBrowser
-	bind:isOpen={showHardlinkBrowser}
-	endpoint="/api/hardlink-directory"
-	title="Select Hard Link Destination"
-	onSelect={(path) => { newDestination = path; }}
 />

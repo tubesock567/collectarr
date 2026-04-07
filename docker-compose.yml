@@ -6,11 +6,9 @@ services:
     volumes:
       - ./data:/data
       - /data/media:/media
-      - /data/media/other/collectarr:/hardlink_destination
       - ./frontend/build:/app/frontend/build:ro
     environment:
       - MEDIA_PATH=/media
-      - HARDLINK_DESTINATION_PATH=/hardlink_destination
       - DB_PATH=/data/collectarr.db
       - PORT=8090
       - AUTO_SCAN=true
