@@ -50,7 +50,14 @@
 		previewFailed = true;
 	}
 
-	function handleSelectionToggle(event) {
+	function handleCardClick(event) {
+		if (selectable) {
+			event.preventDefault();
+			onToggleSelect(video.id);
+		}
+	}
+
+	function handleSelectionButtonClick(event) {
 		event.preventDefault();
 		event.stopPropagation();
 		onToggleSelect(video.id);
@@ -65,6 +72,7 @@
 		onmouseleave={stopHover}
 		onfocus={startHover}
 		onblur={stopHover}
+		onclick={handleCardClick}
 	>
 	<div class="w-full aspect-video bg-neutral-900 border overflow-hidden relative transition-all duration-300 {selected ? 'border-white ring-2 ring-white ring-offset-2 ring-offset-black' : 'border-neutral-800 group-hover:border-neutral-500'}">
 		<img
@@ -112,11 +120,17 @@
 		{#if selectable}
 			<button
 				type="button"
-				class="absolute right-2 top-2 z-10 flex h-7 min-w-7 items-center justify-center border border-white/25 bg-black/80 px-2 text-[11px] font-mono leading-none text-white transition-colors hover:border-white/60 hover:bg-black {selected ? 'border-white bg-white text-black hover:bg-white' : ''}"
-				onclick={handleSelectionToggle}
+				class="absolute right-2 top-2 z-10 flex h-7 min-w-7 items-center justify-center border border-white/25 bg-black/80 px-2 text-white transition-colors hover:border-white/60 hover:bg-black {selected ? 'border-white bg-white text-black hover:bg-white' : ''}"
+				onclick={handleSelectionButtonClick}
 				aria-label={selected ? `Deselect ${video.title}` : `Select ${video.title}`}
 			>
-				{selected ? '✓' : '+'}
+				{#if selected}
+					<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/>
+					</svg>
+				{:else}
+					<span class="text-[11px] font-mono leading-none">+</span>
+				{/if}
 			</button>
 		{/if}
 
