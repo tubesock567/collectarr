@@ -68,6 +68,8 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/auth/change-password", api.authMiddleware(http.HandlerFunc(api.handleChangePassword))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/logs", api.authMiddleware(http.HandlerFunc(api.handleGetLogs))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/videos", api.authMiddleware(http.HandlerFunc(api.handleListVideos))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/videos/metadata/options", api.authMiddleware(http.HandlerFunc(api.handleVideoMetadataOptions))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/videos/metadata/bulk", api.authMiddleware(http.HandlerFunc(api.handleBulkUpdateVideoMetadata))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/videos/{id:[0-9]+}", api.authMiddleware(http.HandlerFunc(api.handleGetVideo))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/videos/{id:[0-9]+}/metadata", api.authMiddleware(http.HandlerFunc(api.handleUpdateVideoMetadata))).Methods(http.MethodPut, http.MethodOptions)
 	authRouter.Handle("/scan", api.authMiddleware(http.HandlerFunc(api.handleScan))).Methods(http.MethodPost, http.MethodOptions)
@@ -289,6 +291,46 @@ func (api *API) handleUpdateVideoMetadata(w http.ResponseWriter, r *http.Request
 	}
 
 	writeJSON(w, http.StatusOK, group)
+}
+
+func (api *API) handleVideoMetadataOptions(w http.ResponseWriter, r *http.Request) {
+	options, err := api.store.ListMetadataOptions()
+	if err != nil {
+		api.logger.Error("list video metadata options failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load video metadata options"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, options)
+}
+
+func (api *API) handleBulkUpdateVideoMetadata(w http.ResponseWriter, r *http.Request) {
+	var req BulkVideoMetadataUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid bulk video metadata payload"})
+		return
+	}
+
+	if len(req.IDs) == 0 {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "at least one video is required"})
+		return
+	}
+
+	updatedGroups, err := api.store.BulkUpdateVideoGroupsMetadata(req.IDs, req.AddTags, req.RemoveTags, req.AddActors, req.RemoveActors)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "no matching videos found"})
+			return
+		}
+		api.logger.Error("bulk update video metadata failed", "ids", req.IDs, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to update selected video metadata"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, BulkVideoMetadataUpdateResponse{
+		UpdatedCount:  len(updatedGroups),
+		UpdatedGroups: updatedGroups,
+	})
 }
 
 func (api *API) handleScan(w http.ResponseWriter, r *http.Request) {

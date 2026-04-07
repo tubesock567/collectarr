@@ -118,6 +118,24 @@ type VideoMetadataUpdateRequest struct {
 	Actors []string `json:"actors"`
 }
 
+type BulkVideoMetadataUpdateRequest struct {
+	IDs          []int64  `json:"ids"`
+	AddTags      []string `json:"add_tags"`
+	RemoveTags   []string `json:"remove_tags"`
+	AddActors    []string `json:"add_actors"`
+	RemoveActors []string `json:"remove_actors"`
+}
+
+type VideoMetadataOptionsResponse struct {
+	Tags   []string `json:"tags"`
+	Actors []string `json:"actors"`
+}
+
+type BulkVideoMetadataUpdateResponse struct {
+	UpdatedCount  int          `json:"updated_count"`
+	UpdatedGroups []VideoGroup `json:"updated_groups"`
+}
+
 type PreviewGenerationStatus struct {
 	Status                  string     `json:"status"`
 	Source                  string     `json:"source,omitempty"`

@@ -8,6 +8,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -458,6 +459,102 @@ func (s *Store) UpdateVideoGroupMetadata(id int64, tags []string, actors []strin
 	return nil
 }
 
+func (s *Store) BulkUpdateVideoGroupsMetadata(ids []int64, addTags []string, removeTags []string, addActors []string, removeActors []string) ([]VideoGroup, error) {
+	cleanIDs := uniqueInt64s(ids)
+	if len(cleanIDs) == 0 {
+		return nil, sql.ErrNoRows
+	}
+
+	titles, err := s.getTitlesForVideoIDs(cleanIDs)
+	if err != nil {
+		return nil, err
+	}
+	if len(titles) == 0 {
+		return nil, sql.ErrNoRows
+	}
+
+	addTags = sanitizeStringList(addTags)
+	removeTags = sanitizeStringList(removeTags)
+	addActors = sanitizeStringList(addActors)
+	removeActors = sanitizeStringList(removeActors)
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return nil, fmt.Errorf("begin bulk metadata update: %w", err)
+	}
+
+	updatedTitles := make([]string, 0, len(titles))
+	for _, title := range titles {
+		tags, actors, err := loadMetadataForTitle(tx, title)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, err
+		}
+
+		nextTags := applyStringListChanges(tags, addTags, removeTags)
+		nextActors := applyStringListChanges(actors, addActors, removeActors)
+
+		tagsJSON, err := marshalStringList(nextTags)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, fmt.Errorf("encode bulk tags: %w", err)
+		}
+		actorsJSON, err := marshalStringList(nextActors)
+		if err != nil {
+			_ = tx.Rollback()
+			return nil, fmt.Errorf("encode bulk actors: %w", err)
+		}
+
+		if _, err := tx.Exec(`
+			UPDATE videos
+			SET tags_json = ?, actors_json = ?
+			WHERE title = ?`, tagsJSON, actorsJSON, title); err != nil {
+			_ = tx.Rollback()
+			return nil, fmt.Errorf("bulk update video group metadata: %w", err)
+		}
+
+		updatedTitles = append(updatedTitles, title)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("commit bulk metadata update: %w", err)
+	}
+
+	updatedGroups := make([]VideoGroup, 0, len(updatedTitles))
+	for _, title := range updatedTitles {
+		group, err := s.GetVideoGroupByTitle(title)
+		if err != nil {
+			return nil, err
+		}
+		updatedGroups = append(updatedGroups, group)
+	}
+
+	if s.logger != nil {
+		s.logger.Info("bulk video metadata updated", "group_count", len(updatedGroups), "tags_added", len(addTags), "tags_removed", len(removeTags), "actors_added", len(addActors), "actors_removed", len(removeActors))
+	}
+
+	return updatedGroups, nil
+}
+
+func (s *Store) ListMetadataOptions() (VideoMetadataOptionsResponse, error) {
+	groups, err := s.ListVideoGroups()
+	if err != nil {
+		return VideoMetadataOptionsResponse{}, err
+	}
+
+	tagSet := map[string]string{}
+	actorSet := map[string]string{}
+	for _, group := range groups {
+		collectCaseInsensitiveStrings(tagSet, group.Tags)
+		collectCaseInsensitiveStrings(actorSet, group.Actors)
+	}
+
+	return VideoMetadataOptionsResponse{
+		Tags:   sortedStringMapValues(tagSet),
+		Actors: sortedStringMapValues(actorSet),
+	}, nil
+}
+
 func (s *Store) IsUniqueFilenameError(err error) bool {
 	if err == nil {
 		return false
@@ -712,13 +809,124 @@ func sanitizeStringList(values []string) []string {
 		if trimmed == "" {
 			continue
 		}
-		if _, exists := seen[trimmed]; exists {
+		key := strings.ToLower(trimmed)
+		if _, exists := seen[key]; exists {
 			continue
 		}
-		seen[trimmed] = struct{}{}
+		seen[key] = struct{}{}
 		cleaned = append(cleaned, trimmed)
 	}
 	return cleaned
+}
+
+func uniqueInt64s(values []int64) []int64 {
+	seen := make(map[int64]struct{}, len(values))
+	unique := make([]int64, 0, len(values))
+	for _, value := range values {
+		if _, exists := seen[value]; exists {
+			continue
+		}
+		seen[value] = struct{}{}
+		unique = append(unique, value)
+	}
+	return unique
+}
+
+func applyStringListChanges(existing []string, add []string, remove []string) []string {
+	result := sanitizeStringList(existing)
+	if len(add) > 0 {
+		result = sanitizeStringList(append(result, add...))
+	}
+	if len(remove) == 0 {
+		return result
+	}
+
+	removeSet := make(map[string]struct{}, len(remove))
+	for _, value := range remove {
+		removeSet[strings.ToLower(strings.TrimSpace(value))] = struct{}{}
+	}
+
+	filtered := make([]string, 0, len(result))
+	for _, value := range result {
+		if _, shouldRemove := removeSet[strings.ToLower(value)]; shouldRemove {
+			continue
+		}
+		filtered = append(filtered, value)
+	}
+	return filtered
+}
+
+func collectCaseInsensitiveStrings(dst map[string]string, values []string) {
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, exists := dst[key]; !exists {
+			dst[key] = trimmed
+		}
+	}
+}
+
+func sortedStringMapValues(values map[string]string) []string {
+	result := make([]string, 0, len(values))
+	for _, value := range values {
+		result = append(result, value)
+	}
+	sort.Slice(result, func(i, j int) bool {
+		return strings.ToLower(result[i]) < strings.ToLower(result[j])
+	})
+	return result
+}
+
+func (s *Store) getTitlesForVideoIDs(ids []int64) ([]string, error) {
+	placeholders := make([]string, 0, len(ids))
+	args := make([]any, 0, len(ids))
+	for _, id := range ids {
+		placeholders = append(placeholders, "?")
+		args = append(args, id)
+	}
+
+	rows, err := s.db.Query(`SELECT DISTINCT title FROM videos WHERE id IN (`+strings.Join(placeholders, ",")+`) ORDER BY title`, args...)
+	if err != nil {
+		return nil, fmt.Errorf("query titles for bulk metadata update: %w", err)
+	}
+	defer rows.Close()
+
+	var titles []string
+	for rows.Next() {
+		var title string
+		if err := rows.Scan(&title); err != nil {
+			return nil, fmt.Errorf("scan bulk metadata title: %w", err)
+		}
+		titles = append(titles, title)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate bulk metadata titles: %w", err)
+	}
+
+	return titles, nil
+}
+
+func loadMetadataForTitle(queryer interface {
+	QueryRow(query string, args ...any) *sql.Row
+}, title string) ([]string, []string, error) {
+	var tagsJSON string
+	var actorsJSON string
+	if err := queryer.QueryRow(`
+		SELECT tags_json, actors_json
+		FROM videos
+		WHERE title = ?
+		ORDER BY id DESC
+		LIMIT 1`, title).Scan(&tagsJSON, &actorsJSON); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil, err
+		}
+		return nil, nil, fmt.Errorf("load video group metadata for title: %w", err)
+	}
+
+	return parseStringList(tagsJSON), parseStringList(actorsJSON), nil
 }
 
 func (s *Store) getMetadataByTitle(title string) (string, string, error) {
@@ -743,4 +951,16 @@ func mergeGroupMetadata(group *VideoGroup, video Video) {
 	if len(group.Actors) == 0 && len(video.Actors) > 0 {
 		group.Actors = append([]string(nil), video.Actors...)
 	}
+}
+
+func (s *Store) GetVideoGroupByTitle(title string) (VideoGroup, error) {
+	var id int64
+	if err := s.db.QueryRow(`SELECT id FROM videos WHERE title = ? ORDER BY id DESC LIMIT 1`, title).Scan(&id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return VideoGroup{}, err
+		}
+		return VideoGroup{}, fmt.Errorf("get video id by title: %w", err)
+	}
+
+	return s.GetVideoGroupByID(id)
 }
