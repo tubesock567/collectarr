@@ -8,7 +8,11 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
+	"image/draw"
+	"image/jpeg"
 	"log/slog"
+	"math"
 	"mime"
 	"net/http"
 	"os"
@@ -65,6 +69,8 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/admin/clear-database", api.authMiddleware(http.HandlerFunc(api.handleClearDatabase))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/stream", api.authMiddleware(http.HandlerFunc(api.handleStreamVideo))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/thumbnail", api.authMiddleware(http.HandlerFunc(api.handleThumbnail))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/video/{id:[0-9]+}/preview", api.authMiddleware(http.HandlerFunc(api.handlePreviewMetadata))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/video/{id:[0-9]+}/preview-sprite", api.authMiddleware(http.HandlerFunc(api.handlePreviewSprite))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/thumbnails/generate", api.authMiddleware(http.HandlerFunc(api.handleGenerateThumbnails))).Methods(http.MethodPost, http.MethodOptions)
 	router.HandleFunc("/directory", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/settings", http.StatusTemporaryRedirect)
@@ -481,6 +487,51 @@ func (api *API) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, thumbnailPath)
 }
 
+func (api *API) handlePreviewMetadata(w http.ResponseWriter, r *http.Request) {
+	video, err := api.videoFromRequest(r)
+	if err != nil {
+		api.writeVideoError(w, err)
+		return
+	}
+
+	preview, err := api.ensurePreviewSprite(r.Context(), video)
+	if err != nil {
+		if errors.Is(err, errPreviewFFmpegMissing) {
+			writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "preview generation requires ffmpeg"})
+			return
+		}
+
+		api.logger.Error("ensure preview sprite failed", "id", video.ID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to generate preview sprite"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, preview)
+}
+
+func (api *API) handlePreviewSprite(w http.ResponseWriter, r *http.Request) {
+	video, err := api.videoFromRequest(r)
+	if err != nil {
+		api.writeVideoError(w, err)
+		return
+	}
+
+	_, err = api.ensurePreviewSprite(r.Context(), video)
+	if err != nil {
+		if errors.Is(err, errPreviewFFmpegMissing) {
+			writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "preview generation requires ffmpeg"})
+			return
+		}
+
+		api.logger.Error("load preview sprite failed", "id", video.ID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load preview sprite"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	http.ServeFile(w, r, previewSpriteFilePath(video.ID))
+}
+
 func (api *API) handleGenerateThumbnails(w http.ResponseWriter, r *http.Request) {
 	api.thumbWg.Add(1)
 	go func() {
@@ -529,6 +580,7 @@ func (api *API) generateAllThumbnails() {
 }
 
 var errThumbnailFFmpegMissing = errors.New("ffmpeg not available")
+var errPreviewFFmpegMissing = errors.New("ffmpeg not available for previews")
 
 func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bool, error) {
 	ffmpegPath, err := exec.LookPath("ffmpeg")
@@ -574,12 +626,183 @@ func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bo
 	return thumbnailPath, true, nil
 }
 
+func (api *API) ensurePreviewSprite(parent context.Context, video Video) (PreviewSpriteResponse, error) {
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return PreviewSpriteResponse{}, errPreviewFFmpegMissing
+	}
+
+	previewDir := previewCacheDir()
+	if err := os.MkdirAll(previewDir, 0o755); err != nil {
+		return PreviewSpriteResponse{}, fmt.Errorf("create preview directory: %w", err)
+	}
+
+	spritePath := previewSpriteFilePath(video.ID)
+	metadataPath := previewMetadataFilePath(video.ID)
+	sourceInfo, err := os.Stat(video.Path)
+	if err != nil {
+		return PreviewSpriteResponse{}, fmt.Errorf("stat source video: %w", err)
+	}
+
+	if spriteInfo, err := os.Stat(spritePath); err == nil {
+		if metadata, err := readPreviewMetadata(metadataPath); err == nil && spriteInfo.ModTime().After(sourceInfo.ModTime()) {
+			metadata.SpriteURL = fmt.Sprintf("/api/video/%d/preview-sprite", video.ID)
+			return metadata, nil
+		}
+	}
+
+	const frameWidth = 240
+	const frameHeight = 135
+	const columns = 3
+	const sampleCount = 9
+	rows := int(math.Ceil(float64(sampleCount) / float64(columns)))
+	timestamps := api.samplePreviewTimestamps(video.Duration, sampleCount)
+
+	tempDir, err := os.MkdirTemp(previewDir, fmt.Sprintf("video-%d-*", video.ID))
+	if err != nil {
+		return PreviewSpriteResponse{}, fmt.Errorf("create preview temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	sprite := image.NewRGBA(image.Rect(0, 0, columns*frameWidth, rows*frameHeight))
+	for idx, timestamp := range timestamps {
+		framePath := filepath.Join(tempDir, fmt.Sprintf("frame-%02d.jpg", idx))
+		if err := generatePreviewFrame(parent, ffmpegPath, video.Path, framePath, timestamp, frameWidth, frameHeight); err != nil {
+			return PreviewSpriteResponse{}, err
+		}
+
+		frameFile, err := os.Open(framePath)
+		if err != nil {
+			return PreviewSpriteResponse{}, fmt.Errorf("open preview frame: %w", err)
+		}
+		frameImage, err := jpeg.Decode(frameFile)
+		frameFile.Close()
+		if err != nil {
+			return PreviewSpriteResponse{}, fmt.Errorf("decode preview frame: %w", err)
+		}
+
+		col := idx % columns
+		row := idx / columns
+		draw.Draw(sprite, image.Rect(col*frameWidth, row*frameHeight, (col+1)*frameWidth, (row+1)*frameHeight), frameImage, image.Point{}, draw.Src)
+	}
+
+	spriteFile, err := os.Create(spritePath)
+	if err != nil {
+		return PreviewSpriteResponse{}, fmt.Errorf("create preview sprite: %w", err)
+	}
+	if err := jpeg.Encode(spriteFile, sprite, &jpeg.Options{Quality: 85}); err != nil {
+		spriteFile.Close()
+		return PreviewSpriteResponse{}, fmt.Errorf("encode preview sprite: %w", err)
+	}
+	if err := spriteFile.Close(); err != nil {
+		return PreviewSpriteResponse{}, fmt.Errorf("close preview sprite: %w", err)
+	}
+
+	metadata := PreviewSpriteResponse{
+		SpriteURL:   fmt.Sprintf("/api/video/%d/preview-sprite", video.ID),
+		FrameWidth:  frameWidth,
+		FrameHeight: frameHeight,
+		Columns:     columns,
+		Rows:        rows,
+		Timestamps:  timestamps,
+		Duration:    video.Duration,
+		SampleCount: sampleCount,
+	}
+
+	if err := writePreviewMetadata(metadataPath, metadata); err != nil {
+		return PreviewSpriteResponse{}, err
+	}
+
+	return metadata, nil
+}
+
 func thumbnailCacheDir() string {
 	return filepath.Join(os.TempDir(), "collectarr-thumbnails")
 }
 
 func thumbnailFilePath(videoID int64) string {
 	return filepath.Join(thumbnailCacheDir(), fmt.Sprintf("%d.jpg", videoID))
+}
+
+func previewCacheDir() string {
+	return filepath.Join(os.TempDir(), "collectarr-preview-sprites")
+}
+
+func previewSpriteFilePath(videoID int64) string {
+	return filepath.Join(previewCacheDir(), fmt.Sprintf("%d.jpg", videoID))
+}
+
+func previewMetadataFilePath(videoID int64) string {
+	return filepath.Join(previewCacheDir(), fmt.Sprintf("%d.json", videoID))
+}
+
+func generatePreviewFrame(parent context.Context, ffmpegPath, videoPath, outputPath string, timestamp float64, width, height int) error {
+	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, ffmpegPath,
+		"-y",
+		"-ss", fmt.Sprintf("%.2f", timestamp),
+		"-i", videoPath,
+		"-frames:v", "1",
+		"-vf", fmt.Sprintf("scale=%d:%d", width, height),
+		outputPath,
+	)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("generate preview frame: %w (output: %s)", err, string(output))
+	}
+
+	return nil
+}
+
+func (api *API) samplePreviewTimestamps(duration, count int) []float64 {
+	if count <= 0 {
+		return nil
+	}
+
+	timestamps := make([]float64, 0, count)
+	if duration <= 0 {
+		for i := 0; i < count; i++ {
+			timestamps = append(timestamps, float64(i+1))
+		}
+		return timestamps
+	}
+
+	minTime := math.Max(1, float64(duration)*0.1)
+	maxTime := math.Max(minTime, float64(duration)*0.9)
+	if count == 1 {
+		return []float64{(minTime + maxTime) / 2}
+	}
+	step := (maxTime - minTime) / float64(count-1)
+	for i := 0; i < count; i++ {
+		timestamps = append(timestamps, minTime+(float64(i)*step))
+	}
+	return timestamps
+}
+
+func readPreviewMetadata(path string) (PreviewSpriteResponse, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return PreviewSpriteResponse{}, fmt.Errorf("read preview metadata: %w", err)
+	}
+
+	var metadata PreviewSpriteResponse
+	if err := json.Unmarshal(data, &metadata); err != nil {
+		return PreviewSpriteResponse{}, fmt.Errorf("decode preview metadata: %w", err)
+	}
+
+	return metadata, nil
+}
+
+func writePreviewMetadata(path string, metadata PreviewSpriteResponse) error {
+	data, err := json.Marshal(metadata)
+	if err != nil {
+		return fmt.Errorf("encode preview metadata: %w", err)
+	}
+	if err := os.WriteFile(path, data, 0o644); err != nil {
+		return fmt.Errorf("write preview metadata: %w", err)
+	}
+	return nil
 }
 
 func (api *API) videoFromRequest(r *http.Request) (Video, error) {

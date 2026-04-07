@@ -78,6 +78,17 @@ type ClearDatabaseResponse struct {
 	Status string `json:"status"`
 }
 
+type PreviewSpriteResponse struct {
+	SpriteURL   string    `json:"sprite_url"`
+	FrameWidth  int       `json:"frame_width"`
+	FrameHeight int       `json:"frame_height"`
+	Columns     int       `json:"columns"`
+	Rows        int       `json:"rows"`
+	Timestamps  []float64 `json:"timestamps"`
+	Duration    int       `json:"duration"`
+	SampleCount int       `json:"sample_count"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
