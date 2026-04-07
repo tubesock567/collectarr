@@ -32,18 +32,19 @@ func main() {
 	}
 
 	scanner := NewScanner(mediaPath, store, logger)
+	api := NewAPI(store, scanner, logger)
 
 	if autoScan {
 		if report, err := scanner.ScanLibrary(context.Background()); err != nil {
 			logger.Error("startup scan failed", "error", err, "media_path", mediaPath)
 		} else {
 			logger.Info("startup scan complete", "files_found", report.FilesFound, "inserted", report.Inserted, "updated", report.Updated, "skipped", report.Skipped)
+			api.enqueueConfiguredPreviewAssets()
 		}
 	} else {
 		logger.Info("auto scan disabled, skipping startup scan")
 	}
 
-	api := NewAPI(store, scanner, logger)
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           api.Router(),

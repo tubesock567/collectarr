@@ -89,6 +89,16 @@ type PreviewSpriteResponse struct {
 	SampleCount int       `json:"sample_count"`
 }
 
+type GenerationSettingsResponse struct {
+	GenerateScrubberSprites bool `json:"generate_scrubber_sprites"`
+	GenerateHoverPreviews   bool `json:"generate_hover_previews"`
+}
+
+type GenerationSettingsRequest struct {
+	GenerateScrubberSprites bool `json:"generate_scrubber_sprites"`
+	GenerateHoverPreviews   bool `json:"generate_hover_previews"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }

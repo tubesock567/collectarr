@@ -66,11 +66,14 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/directory", api.authMiddleware(http.HandlerFunc(api.handleDirectoryListing))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/settings/media-path", api.authMiddleware(http.HandlerFunc(api.handleGetMediaPath))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/settings/media-path", api.authMiddleware(http.HandlerFunc(api.handleSetMediaPath))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/settings/generation", api.authMiddleware(http.HandlerFunc(api.handleGetGenerationSettings))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/settings/generation", api.authMiddleware(http.HandlerFunc(api.handleSetGenerationSettings))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/admin/clear-database", api.authMiddleware(http.HandlerFunc(api.handleClearDatabase))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/stream", api.authMiddleware(http.HandlerFunc(api.handleStreamVideo))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/thumbnail", api.authMiddleware(http.HandlerFunc(api.handleThumbnail))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/preview", api.authMiddleware(http.HandlerFunc(api.handlePreviewMetadata))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/preview-sprite", api.authMiddleware(http.HandlerFunc(api.handlePreviewSprite))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/video/{id:[0-9]+}/hover-preview", api.authMiddleware(http.HandlerFunc(api.handleHoverPreview))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/thumbnails/generate", api.authMiddleware(http.HandlerFunc(api.handleGenerateThumbnails))).Methods(http.MethodPost, http.MethodOptions)
 	router.HandleFunc("/directory", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/settings", http.StatusTemporaryRedirect)
@@ -246,6 +249,8 @@ func (api *API) handleScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	api.enqueueConfiguredPreviewAssets()
+
 	writeJSON(w, http.StatusOK, report)
 }
 
@@ -377,6 +382,33 @@ func (api *API) handleSetMediaPath(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, MediaPathResponse{Path: normalizedPath})
+}
+
+func (api *API) handleGetGenerationSettings(w http.ResponseWriter, r *http.Request) {
+	settings, err := api.store.GetGenerationSettings()
+	if err != nil {
+		api.logger.Error("get generation settings failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load generation settings"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, settings)
+}
+
+func (api *API) handleSetGenerationSettings(w http.ResponseWriter, r *http.Request) {
+	var req GenerationSettingsRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid generation settings payload"})
+		return
+	}
+
+	if err := api.store.SetGenerationSettings(req); err != nil {
+		api.logger.Error("set generation settings failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to save generation settings"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, GenerationSettingsResponse(req))
 }
 
 func (api *API) scanMediaPath() (string, error) {
@@ -532,6 +564,29 @@ func (api *API) handlePreviewSprite(w http.ResponseWriter, r *http.Request) {
 	http.ServeFile(w, r, previewSpriteFilePath(video.ID))
 }
 
+func (api *API) handleHoverPreview(w http.ResponseWriter, r *http.Request) {
+	video, err := api.videoFromRequest(r)
+	if err != nil {
+		api.writeVideoError(w, err)
+		return
+	}
+
+	previewPath, err := api.ensureHoverPreview(r.Context(), video)
+	if err != nil {
+		if errors.Is(err, errPreviewFFmpegMissing) {
+			writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "hover preview generation requires ffmpeg"})
+			return
+		}
+
+		api.logger.Error("load hover preview failed", "id", video.ID, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load hover preview"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "video/mp4")
+	http.ServeFile(w, r, previewPath)
+}
+
 func (api *API) handleGenerateThumbnails(w http.ResponseWriter, r *http.Request) {
 	api.thumbWg.Add(1)
 	go func() {
@@ -543,6 +598,46 @@ func (api *API) handleGenerateThumbnails(w http.ResponseWriter, r *http.Request)
 		"status":  "started",
 		"message": "Thumbnail generation started in background",
 	})
+}
+
+func (api *API) generateConfiguredPreviewAssets(parent context.Context) {
+	settings, err := api.store.GetGenerationSettings()
+	if err != nil {
+		api.logger.Error("load generation settings failed", "error", err)
+		return
+	}
+	if !settings.GenerateScrubberSprites && !settings.GenerateHoverPreviews {
+		return
+	}
+
+	videos, err := api.store.ListVideos()
+	if err != nil {
+		api.logger.Error("failed to list videos for preview generation", "error", err)
+		return
+	}
+
+	api.logger.Info("starting configured preview asset generation", "videos", len(videos), "scrubber_sprites", settings.GenerateScrubberSprites, "hover_previews", settings.GenerateHoverPreviews)
+	for _, video := range videos {
+		if settings.GenerateScrubberSprites {
+			if _, err := api.ensurePreviewSprite(parent, video); err != nil && !errors.Is(err, errPreviewFFmpegMissing) {
+				api.logger.Error("generate scrubber sprite failed", "video_id", video.ID, "title", video.Title, "error", err)
+			}
+		}
+		if settings.GenerateHoverPreviews {
+			if _, err := api.ensureHoverPreview(parent, video); err != nil && !errors.Is(err, errPreviewFFmpegMissing) {
+				api.logger.Error("generate hover preview failed", "video_id", video.ID, "title", video.Title, "error", err)
+			}
+		}
+	}
+	api.logger.Info("configured preview asset generation complete", "videos", len(videos))
+}
+
+func (api *API) enqueueConfiguredPreviewAssets() {
+	api.thumbWg.Add(1)
+	go func() {
+		defer api.thumbWg.Done()
+		api.generateConfiguredPreviewAssets(context.Background())
+	}()
 }
 
 func (api *API) generateAllThumbnails() {
@@ -716,6 +811,74 @@ func (api *API) ensurePreviewSprite(parent context.Context, video Video) (Previe
 	return metadata, nil
 }
 
+func (api *API) ensureHoverPreview(parent context.Context, video Video) (string, error) {
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return "", errPreviewFFmpegMissing
+	}
+
+	previewDir := hoverPreviewCacheDir()
+	if err := os.MkdirAll(previewDir, 0o755); err != nil {
+		return "", fmt.Errorf("create hover preview directory: %w", err)
+	}
+
+	previewPath := hoverPreviewFilePath(video.ID)
+	sourceInfo, err := os.Stat(video.Path)
+	if err != nil {
+		return "", fmt.Errorf("stat source video: %w", err)
+	}
+	if previewInfo, err := os.Stat(previewPath); err == nil && previewInfo.ModTime().After(sourceInfo.ModTime()) {
+		return previewPath, nil
+	}
+
+	const segmentCount = 4
+	const segmentDuration = 1.5
+	timestamps := api.samplePreviewTimestamps(video.Duration, segmentCount)
+	tempDir, err := os.MkdirTemp(previewDir, fmt.Sprintf("hover-%d-*", video.ID))
+	if err != nil {
+		return "", fmt.Errorf("create hover preview temp dir: %w", err)
+	}
+	defer os.RemoveAll(tempDir)
+
+	segmentPaths := make([]string, 0, len(timestamps))
+	for idx, timestamp := range timestamps {
+		segmentPath := filepath.Join(tempDir, fmt.Sprintf("segment-%02d.mp4", idx))
+		if err := generateHoverPreviewSegment(parent, ffmpegPath, video.Path, segmentPath, timestamp, segmentDuration); err != nil {
+			return "", err
+		}
+		segmentPaths = append(segmentPaths, segmentPath)
+	}
+
+	concatFile := filepath.Join(tempDir, "segments.txt")
+	var builder strings.Builder
+	for _, segmentPath := range segmentPaths {
+		builder.WriteString("file '")
+		builder.WriteString(strings.ReplaceAll(segmentPath, "'", "'\\''"))
+		builder.WriteString("'\n")
+	}
+	if err := os.WriteFile(concatFile, []byte(builder.String()), 0o644); err != nil {
+		return "", fmt.Errorf("write hover preview concat file: %w", err)
+	}
+
+	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, ffmpegPath,
+		"-y",
+		"-f", "concat",
+		"-safe", "0",
+		"-i", concatFile,
+		"-c:v", "libx264",
+		"-pix_fmt", "yuv420p",
+		"-movflags", "+faststart",
+		previewPath,
+	)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return "", fmt.Errorf("generate hover preview: %w (output: %s)", err, string(output))
+	}
+
+	return previewPath, nil
+}
+
 func thumbnailCacheDir() string {
 	return filepath.Join(os.TempDir(), "collectarr-thumbnails")
 }
@@ -736,6 +899,14 @@ func previewMetadataFilePath(videoID int64) string {
 	return filepath.Join(previewCacheDir(), fmt.Sprintf("%d.json", videoID))
 }
 
+func hoverPreviewCacheDir() string {
+	return filepath.Join(os.TempDir(), "collectarr-hover-previews")
+}
+
+func hoverPreviewFilePath(videoID int64) string {
+	return filepath.Join(hoverPreviewCacheDir(), fmt.Sprintf("%d.mp4", videoID))
+}
+
 func generatePreviewFrame(parent context.Context, ffmpegPath, videoPath, outputPath string, timestamp float64, width, height int) error {
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
 	defer cancel()
@@ -752,6 +923,28 @@ func generatePreviewFrame(parent context.Context, ffmpegPath, videoPath, outputP
 		return fmt.Errorf("generate preview frame: %w (output: %s)", err, string(output))
 	}
 
+	return nil
+}
+
+func generateHoverPreviewSegment(parent context.Context, ffmpegPath, videoPath, outputPath string, timestamp, segmentDuration float64) error {
+	ctx, cancel := context.WithTimeout(parent, 45*time.Second)
+	defer cancel()
+
+	cmd := exec.CommandContext(ctx, ffmpegPath,
+		"-y",
+		"-ss", fmt.Sprintf("%.2f", timestamp),
+		"-t", fmt.Sprintf("%.2f", segmentDuration),
+		"-i", videoPath,
+		"-an",
+		"-vf", "scale=426:240",
+		"-c:v", "libx264",
+		"-preset", "veryfast",
+		"-pix_fmt", "yuv420p",
+		outputPath,
+	)
+	if output, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("generate hover preview segment: %w (output: %s)", err, string(output))
+	}
 	return nil
 }
 

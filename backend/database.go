@@ -7,6 +7,7 @@ import (
 	"log/slog"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
@@ -40,6 +41,8 @@ CREATE TABLE IF NOT EXISTS settings (
 );`
 
 const mediaPathSettingKey = "media_path"
+const generateScrubberSpritesSettingKey = "generate_scrubber_sprites"
+const generateHoverPreviewsSettingKey = "generate_hover_previews"
 
 type Store struct {
 	db     *sql.DB
@@ -209,6 +212,34 @@ func (s *Store) GetMediaPath() (string, error) {
 
 func (s *Store) SetMediaPath(path string) error {
 	return s.SetSetting(mediaPathSettingKey, path)
+}
+
+func (s *Store) GetGenerationSettings() (GenerationSettingsResponse, error) {
+	var settings GenerationSettingsResponse
+
+	scrubberValue, err := s.GetSetting(generateScrubberSpritesSettingKey)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return settings, err
+	}
+	settings.GenerateScrubberSprites = scrubberValue == "true"
+
+	hoverValue, err := s.GetSetting(generateHoverPreviewsSettingKey)
+	if err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return settings, err
+	}
+	settings.GenerateHoverPreviews = hoverValue == "true"
+
+	return settings, nil
+}
+
+func (s *Store) SetGenerationSettings(settings GenerationSettingsRequest) error {
+	if err := s.SetSetting(generateScrubberSpritesSettingKey, strconv.FormatBool(settings.GenerateScrubberSprites)); err != nil {
+		return err
+	}
+	if err := s.SetSetting(generateHoverPreviewsSettingKey, strconv.FormatBool(settings.GenerateHoverPreviews)); err != nil {
+		return err
+	}
+	return nil
 }
 
 func (s *Store) ClearDatabase() error {
