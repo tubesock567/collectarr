@@ -140,7 +140,12 @@
 			if (showInfoPanel) {
 				e.preventDefault();
 				showInfoPanel = false;
-				break;
+			} else if (document.fullscreenElement) {
+				e.preventDefault();
+				document.exitFullscreen();
+			} else {
+				e.preventDefault();
+				goto('/');
 			}
 			break;
 	}
