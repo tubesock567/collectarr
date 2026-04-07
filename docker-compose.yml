@@ -2,7 +2,7 @@ services:
   collectarr:
     build: .
     ports:
-      - "8893:8090"
+      - "8893:8893"
     volumes:
       - ./data:/data
       - /data/media:/media
@@ -10,5 +10,4 @@ services:
     environment:
       - MEDIA_PATH=/media
       - DB_PATH=/data/collectarr.db
-      - PORT=8090
-      - AUTO_SCAN=true
+      - PORT=8893
