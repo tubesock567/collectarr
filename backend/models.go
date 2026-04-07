@@ -66,29 +66,6 @@ type DirectoryEntry struct {
 	Size        int64  `json:"size,omitempty"`
 }
 
-type HardlinkRequest struct {
-	SourcePaths    []string `json:"sourcePaths"`
-	DestinationDir string   `json:"destinationDir"`
-}
-
-type HardlinkResult struct {
-	SourcePath string `json:"sourcePath"`
-	Error      string `json:"error"`
-}
-
-type HardlinkResponse struct {
-	SuccessCount int              `json:"successCount"`
-	Errors       []HardlinkResult `json:"errors"`
-}
-
-type HardlinkDestinationRequest struct {
-	Destination string `json:"destination"`
-}
-
-type HardlinkDestinationResponse struct {
-	Destination string `json:"destination"`
-}
-
 type MediaPathRequest struct {
 	Path string `json:"path"`
 }

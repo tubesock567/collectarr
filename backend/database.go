@@ -39,7 +39,6 @@ CREATE TABLE IF NOT EXISTS settings (
 	value TEXT
 );`
 
-const hardLinkDestinationSettingKey = "hard_link_destination"
 const mediaPathSettingKey = "media_path"
 
 type Store struct {
@@ -82,6 +81,9 @@ func (s *Store) Init() error {
 	}
 	if _, err := s.db.Exec(createSettingsTableSQL); err != nil {
 		return fmt.Errorf("create settings table: %w", err)
+	}
+	if _, err := s.db.Exec(`DELETE FROM settings WHERE key = 'hard_link_destination'`); err != nil {
+		return fmt.Errorf("remove retired hardlink setting: %w", err)
 	}
 
 	hasTitle, err := s.hasVideosColumn("title")
@@ -199,22 +201,6 @@ func (s *Store) SetSetting(key, value string) error {
 	}
 
 	return nil
-}
-
-func (s *Store) GetHardLinkDestination() (string, error) {
-	return s.GetSetting(hardLinkDestinationSettingKey)
-}
-
-func (s *Store) SetHardLinkDestination(path string) error {
-	return s.SetSetting(hardLinkDestinationSettingKey, path)
-}
-
-func (s *Store) GetHardlinkDestination() (string, error) {
-	return s.GetHardLinkDestination()
-}
-
-func (s *Store) SetHardlinkDestination(destination string) error {
-	return s.SetHardLinkDestination(destination)
 }
 
 func (s *Store) GetMediaPath() (string, error) {
