@@ -23,6 +23,10 @@
 	let hoverPreviewIndex = $state(-1);
 	let showingPreview = $state(false);
 	let showInfoPanel = $state(false);
+	let tagsDraft = $state('');
+	let actorsDraft = $state('');
+	let savingMetadata = $state(false);
+	let metadataMessage = $state('');
 	
 	let showControls = $state(true);
 	let hideTimer = null;
@@ -193,6 +197,52 @@
 		selectedVariantId = Number(id);
 	}
 
+	function syncMetadataDrafts(videoData) {
+		tagsDraft = (videoData?.tags || []).join(', ');
+		actorsDraft = (videoData?.actors || []).join(', ');
+	}
+
+	function parseMetadataList(value) {
+		return value
+			.split(',')
+			.map((item) => item.trim())
+			.filter(Boolean);
+	}
+
+	function handleTagsInput(event) {
+		tagsDraft = event.currentTarget.value;
+		metadataMessage = '';
+	}
+
+	function handleActorsInput(event) {
+		actorsDraft = event.currentTarget.value;
+		metadataMessage = '';
+	}
+
+	async function saveMetadata() {
+		if (!video || savingMetadata) return;
+		savingMetadata = true;
+		metadataMessage = '';
+
+		try {
+			const res = await authFetch(`/api/videos/${video.id}/metadata`, {
+				method: 'PUT',
+				body: JSON.stringify({
+					tags: parseMetadataList(tagsDraft),
+					actors: parseMetadataList(actorsDraft)
+				})
+			});
+			if (!res.ok) throw new Error('Failed to save video metadata');
+			video = await res.json();
+			syncMetadataDrafts(video);
+			metadataMessage = 'Video details updated.';
+		} catch (err) {
+			metadataMessage = err.message;
+		} finally {
+			savingMetadata = false;
+		}
+	}
+
 	async function loadPreviewData(variantId) {
 		if (!variantId) return;
 		previewLoading = true;
@@ -226,12 +276,13 @@
 
 	let videoSrc = $derived(selectedVariantId ? `/api/video/${selectedVariantId}/stream` : '');
 
-	onMount(async () => {
+		onMount(async () => {
 		resetTimer();
 		try {
 			const res = await authFetch(`/api/videos/${id}`);
 			if (!res.ok) throw new Error('Failed to load video');
 			video = await res.json();
+			syncMetadataDrafts(video);
 			selectedVariantId = video?.variants?.[0]?.id ?? Number(id);
 		} catch (err) {
 			loadError = err.message;
@@ -362,14 +413,57 @@
 						<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Last Scanned</p>
 						<p class="mt-2 text-white">{formatDate(video?.date_scanned)}</p>
 					</div>
-					<div>
-						<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Current Quality</p>
-						<p class="mt-2 text-white">{video?.variants?.find((variant) => variant.id === selectedVariantId)?.quality || 'Original'}</p>
-					</div>
+				<div>
+					<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Current Quality</p>
+					<p class="mt-2 text-white">{video?.variants?.find((variant) => variant.id === selectedVariantId)?.quality || 'Original'}</p>
+				</div>
+			</div>
+
+			<div class="space-y-4 border-t border-white/10 pt-6">
+				<div>
+					<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Tags</p>
+					<textarea
+						value={tagsDraft}
+						oninput={handleTagsInput}
+						rows="3"
+						placeholder="e.g. drama, romance, action"
+						class="mt-3 w-full border border-white/15 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-white/25 focus:border-white/40"
+					></textarea>
+					<p class="mt-2 text-xs text-white/35">Comma separated.</p>
 				</div>
 
 				<div>
-					<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Available Variants</p>
+					<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Actors / Actresses</p>
+					<textarea
+						value={actorsDraft}
+						oninput={handleActorsInput}
+						rows="4"
+						placeholder="e.g. Jane Doe, John Doe"
+						class="mt-3 w-full border border-white/15 bg-white/5 px-4 py-3 text-sm text-white outline-none transition-colors placeholder:text-white/25 focus:border-white/40"
+					></textarea>
+					<p class="mt-2 text-xs text-white/35">Comma separated.</p>
+				</div>
+
+				<div class="flex items-center gap-3">
+					<button
+						class="border border-white/20 bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-black transition-colors hover:bg-white/85 disabled:border-white/10 disabled:bg-white/10 disabled:text-white/35"
+						onclick={saveMetadata}
+						disabled={savingMetadata}
+					>
+						{#if savingMetadata}
+							Saving...
+						{:else}
+							Save Details
+						{/if}
+					</button>
+					{#if metadataMessage}
+						<p class="text-xs text-white/55">{metadataMessage}</p>
+					{/if}
+				</div>
+			</div>
+
+			<div>
+				<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Available Variants</p>
 					<div class="mt-3 space-y-2">
 						{#each video?.variants || [] as variant (variant.id)}
 							<div class="border border-white/10 bg-white/5 px-4 py-3">
