@@ -621,7 +621,7 @@
 
 		{#if totalPages > 1}
 			<div class="flex justify-center items-center gap-2 mt-8">
-				<button class="p-2 rounded border border-neutral-700 hover:border-neutral-500 transition-colors text-neutral-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" onclick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page">
+				<button class="flex h-12 w-12 items-center justify-center rounded border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" onclick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page">
 					<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
 				</button>
 
@@ -629,7 +629,7 @@
 					let start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
 					return start + i;
 				}) as pageNum}
-					<button class="px-3 py-1 text-xs font-mono rounded border transition-colors {currentPage === pageNum ? 'bg-neutral-700 text-white border-neutral-600' : 'text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white'}" onclick={() => goToPage(pageNum)} aria-label="Page {pageNum}">{pageNum}</button>
+					<button class="flex h-12 w-12 items-center justify-center rounded border text-xs font-mono transition-colors {currentPage === pageNum ? 'bg-neutral-700 text-white border-neutral-600' : 'text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white'}" onclick={() => goToPage(pageNum)} aria-label="Page {pageNum}">{pageNum}</button>
 				{/each}
 
 				{#if totalPages > 5 && currentPage < totalPages - 2}
@@ -637,10 +637,10 @@
 				{/if}
 
 				{#if totalPages > 5 && currentPage < totalPages - 2}
-					<button class="px-3 py-1 text-xs font-mono rounded border text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white transition-colors" onclick={() => goToPage(totalPages)} aria-label="Last page">{totalPages}</button>
+					<button class="flex h-12 min-w-12 items-center justify-center rounded border border-neutral-700 px-3 text-xs font-mono text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white" onclick={() => goToPage(totalPages)} aria-label="Last page">{totalPages}</button>
 				{/if}
 
-				<button class="p-2 rounded border border-neutral-700 hover:border-neutral-500 transition-colors text-neutral-400 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" onclick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page">
+				<button class="flex h-12 w-12 items-center justify-center rounded border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" onclick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page">
 					<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
 				</button>
 			</div>
