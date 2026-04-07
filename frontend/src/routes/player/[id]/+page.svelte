@@ -155,6 +155,17 @@
 
 	function updateSelectedVariant(id) {
 		selectedVariantId = Number(id);
+		previewEnabled = true;
+	}
+
+	function togglePreviewMode() {
+		previewEnabled = !previewEnabled;
+		if (previewEnabled && !previewData && !previewLoading && selectedVariantId) {
+			loadPreviewData(selectedVariantId);
+		}
+		if (!previewEnabled) {
+			clearSeekHover();
+		}
 	}
 
 	async function loadPreviewData(variantId) {
@@ -217,13 +228,15 @@
 	});
 
 	let progress = $derived(duration > 0 ? (currentTime / duration) * 100 : 0);
+	const previewDisplayWidth = 180;
+	let previewDisplayHeight = $derived(previewData ? previewDisplayWidth * (previewData.frameHeight / previewData.frameWidth) : 0);
 	let previewBackgroundPosition = $derived.by(() => {
 		if (!previewData || hoverPreviewIndex < 0) return '0px 0px';
 		const column = hoverPreviewIndex % previewData.columns;
 		const row = Math.floor(hoverPreviewIndex / previewData.columns);
-		return `${-column * previewData.frameWidth}px ${-row * previewData.frameHeight}px`;
+		return `${-column * previewDisplayWidth}px ${-row * previewDisplayHeight}px`;
 	});
-	let previewBackgroundSize = $derived(previewData ? `${previewData.columns * previewData.frameWidth}px ${previewData.rows * previewData.frameHeight}px` : 'auto');
+	let previewBackgroundSize = $derived(previewData ? `${previewData.columns * previewDisplayWidth}px ${previewData.rows * previewDisplayHeight}px` : 'auto');
 </script>
 
 <svelte:window on:keydown={handleKeydown} />
@@ -305,8 +318,9 @@
 				<div class="absolute bottom-full mb-4 -translate-x-1/2 pointer-events-none" style="left: {hoverPercent}%">
 					<div class="border border-white/20 bg-black/80 p-2 backdrop-blur-sm">
 						<div
+							data-scrubber-preview="true"
 							class="bg-black"
-							style="width: 180px; height: {180 * (previewData.frameHeight / previewData.frameWidth)}px; background-image: url('{previewData.sprite_url}'); background-position: {previewBackgroundPosition}; background-size: {previewBackgroundSize};"
+							style="width: {previewDisplayWidth}px; height: {previewDisplayHeight}px; background-image: url('{previewData.sprite_url}'); background-position: {previewBackgroundPosition}; background-size: {previewBackgroundSize};"
 						></div>
 						<p class="mt-2 text-center text-[10px] uppercase tracking-[0.2em] text-white/70">{formatTime(hoverTime)}</p>
 					</div>
@@ -350,7 +364,7 @@
 					<span>Preview</span>
 					<button
 						type="button"
-						onclick={() => previewEnabled = !previewEnabled}
+						onclick={togglePreviewMode}
 						class="border border-white/20 px-3 py-2 text-white transition-colors hover:border-white/50 {previewEnabled ? 'bg-white text-black' : 'bg-black/50'}"
 					>
 						{previewLoading ? 'Loading' : (previewEnabled && previewData ? 'On' : 'Off')}
