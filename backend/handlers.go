@@ -75,6 +75,7 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/video/{id:[0-9]+}/preview-sprite", api.authMiddleware(http.HandlerFunc(api.handlePreviewSprite))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/hover-preview", api.authMiddleware(http.HandlerFunc(api.handleHoverPreview))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/thumbnails/generate", api.authMiddleware(http.HandlerFunc(api.handleGenerateThumbnails))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/previews/generate", api.authMiddleware(http.HandlerFunc(api.handleGeneratePreviews))).Methods(http.MethodPost, http.MethodOptions)
 	router.HandleFunc("/directory", func(w http.ResponseWriter, r *http.Request) {
 		http.Redirect(w, r, "/settings", http.StatusTemporaryRedirect)
 	}).Methods(http.MethodGet)
@@ -571,13 +572,12 @@ func (api *API) handleHoverPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	previewPath, err := api.ensureHoverPreview(r.Context(), video)
+	previewPath, err := api.getHoverPreviewPath(video)
 	if err != nil {
-		if errors.Is(err, errPreviewFFmpegMissing) {
-			writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "hover preview generation requires ffmpeg"})
+		if errors.Is(err, errPreviewNotFound) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "preview not found"})
 			return
 		}
-
 		api.logger.Error("load hover preview failed", "id", video.ID, "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load hover preview"})
 		return
@@ -598,6 +598,60 @@ func (api *API) handleGenerateThumbnails(w http.ResponseWriter, r *http.Request)
 		"status":  "started",
 		"message": "Thumbnail generation started in background",
 	})
+}
+
+func (api *API) handleGeneratePreviews(w http.ResponseWriter, r *http.Request) {
+	var req PreviewGenerationRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid request body"})
+		return
+	}
+
+	if !req.GenerateThumbnails && !req.GenerateScrubberSprites && !req.GenerateHoverPreviews {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "at least one preview type must be selected"})
+		return
+	}
+
+	api.thumbWg.Add(1)
+	go func() {
+		defer api.thumbWg.Done()
+		api.generatePreviews(context.Background(), req)
+	}()
+
+	writeJSON(w, http.StatusAccepted, map[string]string{
+		"status":  "started",
+		"message": "Preview generation started in background",
+	})
+}
+
+func (api *API) generatePreviews(parent context.Context, req PreviewGenerationRequest) {
+	api.logger.Info("starting preview generation", "thumbnails", req.GenerateThumbnails, "scrubber_sprites", req.GenerateScrubberSprites, "hover_previews", req.GenerateHoverPreviews)
+
+	videos, err := api.store.ListVideos()
+	if err != nil {
+		api.logger.Error("failed to list videos for preview generation", "error", err)
+		return
+	}
+
+	for _, video := range videos {
+		if req.GenerateThumbnails {
+			if _, _, err := api.ensureThumbnail(parent, video); err != nil && !errors.Is(err, errThumbnailFFmpegMissing) {
+				api.logger.Error("generate thumbnail failed", "video_id", video.ID, "title", video.Title, "error", err)
+			}
+		}
+		if req.GenerateScrubberSprites {
+			if _, err := api.ensurePreviewSprite(parent, video); err != nil && !errors.Is(err, errPreviewFFmpegMissing) {
+				api.logger.Error("generate scrubber sprite failed", "video_id", video.ID, "title", video.Title, "error", err)
+			}
+		}
+		if req.GenerateHoverPreviews {
+			if _, err := api.ensureHoverPreview(parent, video); err != nil && !errors.Is(err, errPreviewFFmpegMissing) {
+				api.logger.Error("generate hover preview failed", "video_id", video.ID, "title", video.Title, "error", err)
+			}
+		}
+	}
+
+	api.logger.Info("preview generation complete", "videos", len(videos))
 }
 
 func (api *API) generateConfiguredPreviewAssets(parent context.Context) {
@@ -676,6 +730,7 @@ func (api *API) generateAllThumbnails() {
 
 var errThumbnailFFmpegMissing = errors.New("ffmpeg not available")
 var errPreviewFFmpegMissing = errors.New("ffmpeg not available for previews")
+var errPreviewNotFound = errors.New("preview not found")
 
 func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bool, error) {
 	ffmpegPath, err := exec.LookPath("ffmpeg")
@@ -880,6 +935,21 @@ func (api *API) ensureHoverPreview(parent context.Context, video Video) (string,
 	}
 
 	return previewPath, nil
+}
+
+func (api *API) getHoverPreviewPath(video Video) (string, error) {
+	previewPath := hoverPreviewFilePath(video.ID)
+	sourceInfo, err := os.Stat(video.Path)
+	if err != nil {
+		return "", fmt.Errorf("stat source video: %w", err)
+	}
+	if previewInfo, err := os.Stat(previewPath); err == nil && previewInfo.ModTime().After(sourceInfo.ModTime()) {
+		return previewPath, nil
+	} else if errors.Is(err, os.ErrNotExist) {
+		return "", errPreviewNotFound
+	} else {
+		return "", fmt.Errorf("check preview cache: %w", err)
+	}
 }
 
 func thumbnailCacheDir() string {
