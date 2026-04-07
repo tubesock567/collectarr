@@ -439,7 +439,7 @@
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 	<div class="flex flex-col gap-3 mb-6">
-		<div class="flex items-center justify-between">
+		<div class="flex items-center justify-between gap-3">
 			<div class="flex items-center gap-3">
 				<button
 					class="sm:hidden h-9 w-9 flex items-center justify-center border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
@@ -483,6 +483,93 @@
 					{/if}
 				</button>
 			</div>
+			
+			<div class="flex items-center gap-3">
+				<label class="flex h-9 w-full items-center self-stretch overflow-hidden border border-neutral-600 bg-neutral-900 text-white transition-colors focus-within:border-neutral-400 sm:w-[28rem] sm:self-auto lg:w-[34rem]">
+					<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-400 border-r border-neutral-600 h-full flex items-center shrink-0">Search</span>
+					<input
+						type="search"
+						value={searchQuery}
+						oninput={handleSearchInput}
+						placeholder="Title, date, tags, actors"
+						class="w-full h-full bg-neutral-900 px-3 text-sm text-white placeholder:text-neutral-500 outline-none focus:border-neutral-400"
+						aria-label="Search videos"
+					/>
+				</label>
+
+				<div class="relative flex-1 sm:flex-none" bind:this={sortDropdownEl}>
+					<button
+						class="w-full flex items-center justify-center sm:justify-start gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 hover:border-neutral-400 transition-colors text-white bg-neutral-900"
+						onclick={() => showSortDropdown = !showSortDropdown}
+						aria-label="Sort options"
+					>
+						<span>Sort: {getSortLabel()}</span>
+						<span
+							class="p-0.5 hover:bg-neutral-700"
+							onclick={(event) => {
+								event.stopPropagation();
+								toggleSortOrder();
+							}}
+							role="button"
+							tabindex="0"
+							onkeydown={(event) => {
+								if (event.key === 'Enter' || event.key === ' ') {
+									event.stopPropagation();
+									toggleSortOrder();
+								}
+							}}
+							aria-label="Toggle sort order"
+							title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+						>
+							<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+								{#if sortOrder === 'asc'}
+									<path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
+								{:else}
+									<path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
+								{/if}
+							</svg>
+						</span>
+						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M7 10l5 5 5-5z"/>
+						</svg>
+					</button>
+					{#if showSortDropdown}
+						<div class="absolute top-full left-0 mt-1 w-40 bg-black border border-neutral-600 shadow-xl z-20">
+							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'dateAdded' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('dateAdded')}>Date added</button>
+							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'duration' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('duration')}>Duration</button>
+							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'alphabetical' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('alphabetical')}>Alphabetical</button>
+						</div>
+					{/if}
+				</div>
+
+				<div class="hidden sm:block relative" bind:this={columnDropdownEl}>
+					<button
+						class="flex items-center gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 hover:border-neutral-400 transition-colors text-white bg-neutral-900"
+						onclick={() => showColumnDropdown = !showColumnDropdown}
+						aria-label="Column count options"
+					>
+						<span>Columns: {columnCount}</span>
+						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M7 10l5 5 5-5z"/>
+						</svg>
+					</button>
+					{#if showColumnDropdown}
+						<div class="absolute top-full left-0 mt-1 w-32 bg-black border border-neutral-600 shadow-xl z-20">
+							{#each [2, 3, 4] as count}
+								<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {columnCount === count ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setColumnCount(count)}>{count} columns</button>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				<button
+					class="flex-1 sm:flex-none h-9 px-3 text-xs uppercase tracking-wider border transition-colors {selectionMode ? 'border-white bg-white text-black' : 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}"
+					onclick={toggleSelectionMode}
+					aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+				>
+					{selectionMode ? 'Selection on' : 'Select'}
+				</button>
+			</div>
 		</div>
 		
 		{#if showMobileMenu}
@@ -521,93 +608,6 @@
 				{/if}
 			</div>
 		{/if}
-		
-		<label class="flex h-9 w-full items-center self-stretch overflow-hidden border border-neutral-600 bg-neutral-900 text-white transition-colors focus-within:border-neutral-400 sm:w-[28rem] sm:self-auto lg:w-[34rem]">
-			<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-400 border-r border-neutral-600 h-full flex items-center shrink-0">Search</span>
-			<input
-				type="search"
-				value={searchQuery}
-				oninput={handleSearchInput}
-				placeholder="Title, date, tags, actors"
-				class="w-full h-full bg-neutral-900 px-3 text-sm text-white placeholder:text-neutral-500 outline-none focus:border-neutral-400"
-				aria-label="Search videos"
-			/>
-		</label>
-
-		<div class="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-			<div class="relative flex-1 sm:flex-none" bind:this={sortDropdownEl}>
-				<button
-					class="w-full flex items-center justify-center sm:justify-start gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 hover:border-neutral-400 transition-colors text-white bg-neutral-900"
-					onclick={() => showSortDropdown = !showSortDropdown}
-					aria-label="Sort options"
-				>
-					<span>Sort: {getSortLabel()}</span>
-					<span
-						class="p-0.5 hover:bg-neutral-700"
-						onclick={(event) => {
-							event.stopPropagation();
-							toggleSortOrder();
-						}}
-						role="button"
-						tabindex="0"
-						onkeydown={(event) => {
-							if (event.key === 'Enter' || event.key === ' ') {
-								event.stopPropagation();
-								toggleSortOrder();
-							}
-						}}
-						aria-label="Toggle sort order"
-						title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-					>
-						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-							{#if sortOrder === 'asc'}
-								<path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
-							{:else}
-								<path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
-							{/if}
-						</svg>
-					</span>
-					<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M7 10l5 5 5-5z"/>
-					</svg>
-				</button>
-				{#if showSortDropdown}
-					<div class="absolute top-full left-0 mt-1 w-40 bg-black border border-neutral-600 shadow-xl z-20">
-						<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'dateAdded' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('dateAdded')}>Date added</button>
-						<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'duration' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('duration')}>Duration</button>
-						<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'alphabetical' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('alphabetical')}>Alphabetical</button>
-					</div>
-				{/if}
-			</div>
-
-			<div class="hidden sm:block relative" bind:this={columnDropdownEl}>
-				<button
-					class="flex items-center gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 hover:border-neutral-400 transition-colors text-white bg-neutral-900"
-					onclick={() => showColumnDropdown = !showColumnDropdown}
-					aria-label="Column count options"
-				>
-					<span>Columns: {columnCount}</span>
-					<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M7 10l5 5 5-5z"/>
-					</svg>
-				</button>
-				{#if showColumnDropdown}
-					<div class="absolute top-full left-0 mt-1 w-32 bg-black border border-neutral-600 shadow-xl z-20">
-						{#each [2, 3, 4] as count}
-							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {columnCount === count ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setColumnCount(count)}>{count} columns</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-
-			<button
-				class="flex-1 sm:flex-none h-9 px-3 text-xs uppercase tracking-wider border transition-colors {selectionMode ? 'border-white bg-white text-black' : 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}"
-				onclick={toggleSelectionMode}
-				aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
-			>
-				{selectionMode ? 'Selection on' : 'Select'}
-			</button>
-		</div>
 	</div>
 
 	{#if selectionMode && !loading && videos.length > 0}
