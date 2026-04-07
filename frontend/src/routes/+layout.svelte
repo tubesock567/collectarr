@@ -10,6 +10,27 @@
 
 	let { children } = $props();
 
+	function handleGlobalKeydown(event) {
+		if ($page.url.pathname.startsWith('/player')) {
+			return;
+		}
+
+		const target = event.target;
+		if (target instanceof HTMLElement) {
+			if (target !== document.body) {
+				return;
+			}
+			const tagName = target.tagName;
+			if (target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT') {
+				return;
+			}
+		}
+
+		if (event.key === 'i' || event.key === 'I') {
+			preferences.toggleIncognito();
+		}
+	}
+
 	onMount(() => {
 		checkAuth();
 		theme.initTheme();
@@ -32,6 +53,8 @@
 		}
 	});
 </script>
+
+<svelte:window on:keydown={handleGlobalKeydown} />
 
 {#if !$page.url.pathname.startsWith('/player') && $page.url.pathname !== '/login'}
 	<nav class="navbar bg-black border-b border-neutral-800 text-white max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-2">

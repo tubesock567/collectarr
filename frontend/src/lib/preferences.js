@@ -31,6 +31,15 @@ function createPreferencesStore() {
 	return {
 		subscribe,
 		setPreferences: applyPreferences,
+		toggleIncognito() {
+			update((current) => {
+				const next = { ...current, incognito: !current.incognito };
+				if (browser) {
+					applyPreferences(next);
+				}
+				return next;
+			});
+		},
 		setIncognito(incognito) {
 			update((current) => {
 				const next = { ...current, incognito };

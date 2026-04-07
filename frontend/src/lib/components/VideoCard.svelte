@@ -50,8 +50,8 @@
 	class="group flex flex-col space-y-3 cursor-pointer"
 	onmouseenter={startHover}
 	onmouseleave={stopHover}
-	focus={startHover}
-	blur={stopHover}
+	onfocus={startHover}
+	onblur={stopHover}
 >
 	<div class="w-full aspect-video bg-neutral-900 border border-neutral-800 overflow-hidden relative group-hover:border-neutral-500 transition-colors duration-300">
 		<img
