@@ -1,5 +1,6 @@
 <script>
 	import { auth, authFetch } from '$lib/auth';
+	import MetadataTokenInput from '$lib/components/MetadataTokenInput.svelte';
 	import { onMount } from 'svelte';
 	import DirectoryBrowser from '$lib/components/DirectoryBrowser.svelte';
 
@@ -31,6 +32,11 @@
 	let clearingDatabase = $state(false);
 	let clearDatabaseMessage = $state('');
 	let showMediaBrowser = $state(false);
+	let metadataOptions = $state({ tags: [], actors: [] });
+	let metadataTagsDraft = $state([]);
+	let metadataActorsDraft = $state([]);
+	let savingMetadataSettings = $state(false);
+	let metadataSettingsMessage = $state('');
 	let logs = $state([]);
 	let logsLoading = $state(false);
 	let logsMessage = $state('');
@@ -75,6 +81,14 @@
 			applyPreviewProgress(await previewStatusRes.json());
 		} catch (err) {
 			previewGenMessage = `Error: ${err.message}`;
+		}
+
+		try {
+			const metadataRes = await authFetch('/api/settings/metadata');
+			if (!metadataRes.ok) throw new Error(await readError(metadataRes, 'Failed to load metadata settings'));
+			metadataOptions = await metadataRes.json();
+		} catch (err) {
+			metadataSettingsMessage = `Error: ${err.message}`;
 		}
 	});
 
@@ -332,6 +346,70 @@
 		const value = new Date(timestamp);
 		if (Number.isNaN(value.getTime())) return timestamp;
 		return value.toLocaleString();
+	}
+
+	function handleMetadataTagsDraftChange(nextValues) {
+		metadataTagsDraft = nextValues;
+		metadataSettingsMessage = '';
+	}
+
+	function handleMetadataActorsDraftChange(nextValues) {
+		metadataActorsDraft = nextValues;
+		metadataSettingsMessage = '';
+	}
+
+	async function refreshMetadataSettings() {
+		const res = await authFetch('/api/settings/metadata');
+		if (!res.ok) throw new Error(await readError(res, 'Failed to load metadata settings'));
+		metadataOptions = await res.json();
+	}
+
+	async function saveMetadataSettings(update) {
+		if (savingMetadataSettings) return;
+		savingMetadataSettings = true;
+		metadataSettingsMessage = '';
+
+		try {
+			const res = await authFetch('/api/settings/metadata', {
+				method: 'POST',
+				body: JSON.stringify(update)
+			});
+			if (!res.ok) throw new Error(await readError(res, 'Failed to update metadata settings'));
+			metadataOptions = await res.json();
+			metadataSettingsMessage = 'Metadata settings updated successfully.';
+		} catch (err) {
+			metadataSettingsMessage = `Error: ${err.message}`;
+		} finally {
+			savingMetadataSettings = false;
+		}
+	}
+
+	async function addMetadataEntries() {
+		if (metadataTagsDraft.length === 0 && metadataActorsDraft.length === 0) {
+			metadataSettingsMessage = 'Add at least one tag or actor.';
+			return;
+		}
+
+		await saveMetadataSettings({
+			add_tags: metadataTagsDraft,
+			add_actors: metadataActorsDraft,
+			remove_tags: [],
+			remove_actors: []
+		});
+
+		if (!metadataSettingsMessage.startsWith('Error')) {
+			metadataTagsDraft = [];
+			metadataActorsDraft = [];
+		}
+	}
+
+	async function removeMetadataEntry(kind, value) {
+		await saveMetadataSettings({
+			add_tags: [],
+			add_actors: [],
+			remove_tags: kind === 'tag' ? [value] : [],
+			remove_actors: kind === 'actor' ? [value] : []
+		});
 	}
 
 	const tabs = [
@@ -600,6 +678,100 @@
 						</p>
 					{/if}
 				</div>
+			</section>
+
+			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
+				<div>
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Metadata Library</h2>
+					<p class="text-xs text-neutral-500">Manage the persistent global tag and actor catalog. Removing an entry here also removes it from videos that currently use it.</p>
+				</div>
+
+				<div class="w-full grid gap-6 lg:grid-cols-2">
+					<div class="space-y-4">
+						<MetadataTokenInput
+							label="Add Tags"
+							values={metadataTagsDraft}
+							suggestions={metadataOptions.tags}
+							placeholder="Type tags to add"
+							helpText="These tags become available across the app immediately."
+							disabled={savingMetadataSettings}
+							onChange={handleMetadataTagsDraftChange}
+						/>
+
+						<div class="space-y-3">
+							<p class="text-xs uppercase tracking-[0.25em] text-neutral-400">Saved Tags</p>
+							{#if metadataOptions.tags.length === 0}
+								<p class="border border-neutral-800 bg-black px-4 py-3 text-sm text-neutral-500">No tags yet.</p>
+							{:else}
+								<div class="flex flex-wrap gap-2">
+									{#each metadataOptions.tags as tag (tag)}
+										<button
+											type="button"
+											class="inline-flex items-center gap-2 border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-white transition-colors hover:border-red-500 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+											onclick={() => removeMetadataEntry('tag', tag)}
+											disabled={savingMetadataSettings}
+										>
+											<span>{tag}</span>
+											<span aria-hidden="true">×</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+
+					<div class="space-y-4">
+						<MetadataTokenInput
+							label="Add Actors / Actresses"
+							values={metadataActorsDraft}
+							suggestions={metadataOptions.actors}
+							placeholder="Type actors to add"
+							helpText="These names become selectable anywhere metadata is edited."
+							disabled={savingMetadataSettings}
+							onChange={handleMetadataActorsDraftChange}
+						/>
+
+						<div class="space-y-3">
+							<p class="text-xs uppercase tracking-[0.25em] text-neutral-400">Saved Actors / Actresses</p>
+							{#if metadataOptions.actors.length === 0}
+								<p class="border border-neutral-800 bg-black px-4 py-3 text-sm text-neutral-500">No actors yet.</p>
+							{:else}
+								<div class="flex flex-wrap gap-2">
+									{#each metadataOptions.actors as actor (actor)}
+										<button
+											type="button"
+											class="inline-flex items-center gap-2 border border-neutral-700 bg-neutral-900 px-3 py-2 text-xs text-white transition-colors hover:border-red-500 hover:text-red-300 disabled:cursor-not-allowed disabled:opacity-50"
+											onclick={() => removeMetadataEntry('actor', actor)}
+											disabled={savingMetadataSettings}
+										>
+											<span>{actor}</span>
+											<span aria-hidden="true">×</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					</div>
+				</div>
+
+				<button
+					onclick={addMetadataEntries}
+					disabled={savingMetadataSettings}
+					class="mt-2 bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
+				>
+					{#if savingMetadataSettings}
+						<span class="loading loading-spinner loading-xs"></span>
+						Updating...
+					{:else}
+						Add Metadata Entries
+					{/if}
+				</button>
+
+				{#if metadataSettingsMessage}
+					<p class="text-xs tracking-wide {metadataSettingsMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
+						{metadataSettingsMessage}
+					</p>
+				{/if}
 			</section>
 
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
