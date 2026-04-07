@@ -76,6 +76,14 @@
 	color: rgba(17, 24, 39, 0.8) !important;
 }
 
+:root.theme-light [class~='text-white/70'] {
+	color: rgba(17, 24, 39, 0.7) !important;
+}
+
+:root.theme-light [class~='text-white/50'] {
+	color: rgba(17, 24, 39, 0.5) !important;
+}
+
 :root.theme-light [class~='from-black/90'] {
 	--tw-gradient-from: rgba(255,255,255,0.9) var(--tw-gradient-from-position) !important;
 	--tw-gradient-to: rgba(255,255,255,0) var(--tw-gradient-to-position) !important;

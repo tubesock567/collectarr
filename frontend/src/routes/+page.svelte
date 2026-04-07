@@ -503,14 +503,14 @@
 			</div>
 		{/if}
 		
-		<label class="flex items-center h-9 border border-neutral-800 bg-black text-white overflow-hidden focus-within:border-neutral-500 transition-colors w-full">
-			<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-500 border-r border-neutral-800 h-full flex items-center shrink-0">Search</span>
+		<label class="flex items-center h-9 border border-neutral-600 bg-neutral-900 text-white overflow-hidden focus-within:border-neutral-400 transition-colors w-full">
+			<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-400 border-r border-neutral-600 h-full flex items-center shrink-0">Search</span>
 			<input
 				type="search"
 				value={searchQuery}
 				oninput={handleSearchInput}
 				placeholder="Title, date, tags, actors"
-				class="w-full h-full bg-black px-3 text-sm text-white placeholder:text-neutral-600 outline-none focus:border-neutral-500"
+				class="w-full h-full bg-neutral-900 px-3 text-sm text-white placeholder:text-neutral-500 outline-none focus:border-neutral-400"
 				aria-label="Search videos"
 			/>
 		</label>
