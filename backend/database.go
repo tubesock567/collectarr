@@ -75,6 +75,10 @@ func NewStore(dbPath string, logger *slog.Logger) (*Store, error) {
 }
 
 func (s *Store) Init() error {
+	if s.logger != nil {
+		s.logger.Info("initializing database schema")
+	}
+
 	if _, err := s.db.Exec(createVideosTableSQL); err != nil {
 		return fmt.Errorf("create videos table: %w", err)
 	}
@@ -361,6 +365,9 @@ func (s *Store) InsertVideo(video ScannedVideo) error {
 	if err != nil {
 		return fmt.Errorf("insert video: %w", err)
 	}
+	if s.logger != nil {
+		s.logger.Info("video inserted", "title", video.Title, "filename", video.Filename)
+	}
 	return nil
 }
 
@@ -373,6 +380,9 @@ func (s *Store) UpdateVideoMetadata(id int64, video ScannedVideo) error {
 	)
 	if err != nil {
 		return fmt.Errorf("update video metadata: %w", err)
+	}
+	if s.logger != nil {
+		s.logger.Info("video metadata updated", "video_id", id, "title", video.Title, "filename", video.Filename)
 	}
 	return nil
 }

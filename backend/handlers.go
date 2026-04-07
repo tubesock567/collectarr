@@ -34,6 +34,7 @@ type API struct {
 	store    *Store
 	scanner  *Scanner
 	logger   *slog.Logger
+	logs     *LogBuffer
 	rngMu    sync.Mutex
 	rngSeed  int64
 	thumbWg  sync.WaitGroup
@@ -41,11 +42,12 @@ type API struct {
 	sessions map[string]string
 }
 
-func NewAPI(store *Store, scanner *Scanner, logger *slog.Logger) *API {
+func NewAPI(store *Store, scanner *Scanner, logger *slog.Logger, logs *LogBuffer) *API {
 	return &API{
 		store:    store,
 		scanner:  scanner,
 		logger:   logger,
+		logs:     logs,
 		rngSeed:  time.Now().UnixNano(),
 		sessions: map[string]string{},
 	}
@@ -56,10 +58,12 @@ func (api *API) Router() http.Handler {
 	router.Use(corsMiddleware)
 
 	authRouter := router.PathPrefix("/api").Subrouter()
+	authRouter.Use(api.requestLoggingMiddleware)
 	authRouter.HandleFunc("/auth/login", api.handleLogin).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.HandleFunc("/auth/logout", api.handleLogout).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/auth/me", api.authMiddleware(http.HandlerFunc(api.handleMe))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/auth/change-password", api.authMiddleware(http.HandlerFunc(api.handleChangePassword))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/logs", api.authMiddleware(http.HandlerFunc(api.handleGetLogs))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/videos", api.authMiddleware(http.HandlerFunc(api.handleListVideos))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/videos/{id:[0-9]+}", api.authMiddleware(http.HandlerFunc(api.handleGetVideo))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/scan", api.authMiddleware(http.HandlerFunc(api.handleScan))).Methods(http.MethodPost, http.MethodOptions)
@@ -89,12 +93,14 @@ func (api *API) Router() http.Handler {
 func (api *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 	var req LoginRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		api.logger.Warn("login rejected", "reason", "invalid_payload", "remote_addr", r.RemoteAddr)
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid login payload"})
 		return
 	}
 
 	req.Username = strings.TrimSpace(req.Username)
 	if req.Username == "" || req.Password == "" {
+		api.logger.Warn("login rejected", "reason", "missing_credentials", "username", req.Username, "remote_addr", r.RemoteAddr)
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "username and password are required"})
 		return
 	}
@@ -102,6 +108,7 @@ func (api *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 	user, err := api.store.GetUserByUsername(req.Username)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
+			api.logger.Warn("login failed", "username", req.Username, "reason", "unknown_user", "remote_addr", r.RemoteAddr)
 			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid credentials"})
 			return
 		}
@@ -111,6 +118,7 @@ func (api *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if err := bcrypt.CompareHashAndPassword([]byte(user.Password), []byte(req.Password)); err != nil {
+		api.logger.Warn("login failed", "username", req.Username, "reason", "invalid_password", "remote_addr", r.RemoteAddr)
 		writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "invalid credentials"})
 		return
 	}
@@ -127,10 +135,16 @@ func (api *API) handleLogin(w http.ResponseWriter, r *http.Request) {
 	api.sessMu.Unlock()
 
 	http.SetCookie(w, api.newSessionCookie(sessionID))
+	api.logger.Info("login succeeded", "username", user.Username, "remote_addr", r.RemoteAddr)
 	writeJSON(w, http.StatusOK, user)
 }
 
 func (api *API) handleLogout(w http.ResponseWriter, r *http.Request) {
+	username := ""
+	if user, ok := userFromContext(r.Context()); ok {
+		username = user.Username
+	}
+
 	if cookie, err := r.Cookie(sessionCookieName); err == nil && cookie.Value != "" {
 		api.sessMu.Lock()
 		delete(api.sessions, cookie.Value)
@@ -138,6 +152,7 @@ func (api *API) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	http.SetCookie(w, api.expiredSessionCookie())
+	api.logger.Info("logout succeeded", "username", username, "remote_addr", r.RemoteAddr)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "logged_out"})
 }
 
@@ -198,6 +213,7 @@ func (api *API) handleChangePassword(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	api.logger.Info("password changed", "username", user.Username)
 	writeJSON(w, http.StatusOK, map[string]string{"status": "password_updated"})
 }
 
@@ -250,6 +266,7 @@ func (api *API) handleScan(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	api.logger.Info("scan completed", "media_path", mediaPath, "files_found", report.FilesFound, "inserted", report.Inserted, "updated", report.Updated, "skipped", report.Skipped)
 	api.enqueueConfiguredPreviewAssets()
 
 	writeJSON(w, http.StatusOK, report)
@@ -333,6 +350,7 @@ func (api *API) handleClearDatabase(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to clear database"})
 		return
 	}
+	api.logger.Warn("database cleared by request")
 	writeJSON(w, http.StatusOK, ClearDatabaseResponse{Status: "database cleared"})
 }
 
@@ -382,6 +400,7 @@ func (api *API) handleSetMediaPath(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	api.logger.Info("media path updated", "path", normalizedPath)
 	writeJSON(w, http.StatusOK, MediaPathResponse{Path: normalizedPath})
 }
 
@@ -409,7 +428,25 @@ func (api *API) handleSetGenerationSettings(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	api.logger.Info("generation settings updated", "generate_thumbnails", req.GenerateThumbnails, "generate_scrubber_sprites", req.GenerateScrubberSprites, "generate_hover_previews", req.GenerateHoverPreviews, "auto_generate_during_scan", req.AutoGenerateDuringScan)
 	writeJSON(w, http.StatusOK, GenerationSettingsResponse(req))
+}
+
+func (api *API) handleGetLogs(w http.ResponseWriter, r *http.Request) {
+	limit := 200
+	if raw := strings.TrimSpace(r.URL.Query().Get("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid log limit"})
+			return
+		}
+		if parsed > defaultLogEntryLimit {
+			parsed = defaultLogEntryLimit
+		}
+		limit = parsed
+	}
+
+	writeJSON(w, http.StatusOK, LogsResponse{Entries: api.logs.List(limit)})
 }
 
 func (api *API) scanMediaPath() (string, error) {
@@ -588,6 +625,7 @@ func (api *API) handleHoverPreview(w http.ResponseWriter, r *http.Request) {
 }
 
 func (api *API) handleGenerateThumbnails(w http.ResponseWriter, r *http.Request) {
+	api.logger.Info("thumbnail generation enqueued")
 	api.thumbWg.Add(1)
 	go func() {
 		defer api.thumbWg.Done()
@@ -612,6 +650,7 @@ func (api *API) handleGeneratePreviews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	api.logger.Info("preview generation enqueued", "generate_thumbnails", req.GenerateThumbnails, "generate_scrubber_sprites", req.GenerateScrubberSprites, "generate_hover_previews", req.GenerateHoverPreviews)
 	api.thumbWg.Add(1)
 	go func() {
 		defer api.thumbWg.Done()
@@ -687,6 +726,7 @@ func (api *API) generateConfiguredPreviewAssets(parent context.Context) {
 }
 
 func (api *API) enqueueConfiguredPreviewAssets() {
+	api.logger.Info("configured preview generation enqueued")
 	api.thumbWg.Add(1)
 	go func() {
 		defer api.thumbWg.Done()
@@ -745,6 +785,7 @@ func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bo
 
 	thumbnailPath := thumbnailFilePath(video.ID)
 	if _, err := os.Stat(thumbnailPath); err == nil {
+		api.logger.Info("thumbnail cache hit", "video_id", video.ID, "title", video.Title)
 		return thumbnailPath, false, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", false, fmt.Errorf("check thumbnail cache: %w", err)
@@ -773,6 +814,7 @@ func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bo
 		return "", false, fmt.Errorf("generate thumbnail: %w (output: %s)", err, string(output))
 	}
 
+	api.logger.Info("thumbnail generated", "video_id", video.ID, "title", video.Title, "path", thumbnailPath)
 	return thumbnailPath, true, nil
 }
 
@@ -797,6 +839,7 @@ func (api *API) ensurePreviewSprite(parent context.Context, video Video) (Previe
 	if spriteInfo, err := os.Stat(spritePath); err == nil {
 		if metadata, err := readPreviewMetadata(metadataPath); err == nil && spriteInfo.ModTime().After(sourceInfo.ModTime()) {
 			metadata.SpriteURL = fmt.Sprintf("/api/video/%d/preview-sprite", video.ID)
+			api.logger.Info("preview sprite cache hit", "video_id", video.ID, "title", video.Title)
 			return metadata, nil
 		}
 	}
@@ -863,6 +906,7 @@ func (api *API) ensurePreviewSprite(parent context.Context, video Video) (Previe
 		return PreviewSpriteResponse{}, err
 	}
 
+	api.logger.Info("preview sprite generated", "video_id", video.ID, "title", video.Title, "path", spritePath)
 	return metadata, nil
 }
 
@@ -883,6 +927,7 @@ func (api *API) ensureHoverPreview(parent context.Context, video Video) (string,
 		return "", fmt.Errorf("stat source video: %w", err)
 	}
 	if previewInfo, err := os.Stat(previewPath); err == nil && previewInfo.ModTime().After(sourceInfo.ModTime()) {
+		api.logger.Info("hover preview cache hit", "video_id", video.ID, "title", video.Title)
 		return previewPath, nil
 	}
 
@@ -934,6 +979,7 @@ func (api *API) ensureHoverPreview(parent context.Context, video Video) (string,
 		return "", fmt.Errorf("generate hover preview: %w (output: %s)", err, string(output))
 	}
 
+	api.logger.Info("hover preview generated", "video_id", video.ID, "title", video.Title, "path", previewPath)
 	return previewPath, nil
 }
 
@@ -1207,6 +1253,7 @@ func (api *API) authMiddleware(next http.Handler) http.Handler {
 
 		cookie, err := r.Cookie(sessionCookieName)
 		if err != nil || cookie.Value == "" {
+			api.logger.Warn("authentication required", "path", r.URL.Path, "remote_addr", r.RemoteAddr)
 			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
 			return
 		}
@@ -1215,6 +1262,7 @@ func (api *API) authMiddleware(next http.Handler) http.Handler {
 		username, ok := api.sessions[cookie.Value]
 		api.sessMu.RUnlock()
 		if !ok {
+			api.logger.Warn("invalid session", "path", r.URL.Path, "remote_addr", r.RemoteAddr)
 			http.SetCookie(w, api.expiredSessionCookie())
 			writeJSON(w, http.StatusUnauthorized, errorResponse{Error: "authentication required"})
 			return
@@ -1223,6 +1271,7 @@ func (api *API) authMiddleware(next http.Handler) http.Handler {
 		user, err := api.store.GetUserByUsername(username)
 		if err != nil {
 			if errors.Is(err, sql.ErrNoRows) {
+				api.logger.Warn("session user missing", "username", username, "path", r.URL.Path)
 				api.sessMu.Lock()
 				delete(api.sessions, cookie.Value)
 				api.sessMu.Unlock()
@@ -1238,6 +1287,45 @@ func (api *API) authMiddleware(next http.Handler) http.Handler {
 
 		next.ServeHTTP(w, r.WithContext(context.WithValue(r.Context(), userContextKey, User{ID: user.ID, Username: user.Username})))
 	})
+}
+
+func (api *API) requestLoggingMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodOptions || r.URL.Path == "/api/logs" {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		started := time.Now()
+		recorder := &statusRecorder{ResponseWriter: w, status: http.StatusOK}
+		next.ServeHTTP(recorder, r)
+
+		api.logger.Info("request completed",
+			"method", r.Method,
+			"path", r.URL.Path,
+			"status", recorder.status,
+			"bytes", recorder.bytes,
+			"duration_ms", time.Since(started).Milliseconds(),
+			"remote_addr", r.RemoteAddr,
+		)
+	})
+}
+
+type statusRecorder struct {
+	http.ResponseWriter
+	status int
+	bytes  int
+}
+
+func (r *statusRecorder) WriteHeader(status int) {
+	r.status = status
+	r.ResponseWriter.WriteHeader(status)
+}
+
+func (r *statusRecorder) Write(data []byte) (int, error) {
+	written, err := r.ResponseWriter.Write(data)
+	r.bytes += written
+	return written, err
 }
 
 func userFromContext(ctx context.Context) (User, bool) {

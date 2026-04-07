@@ -12,7 +12,11 @@ import (
 )
 
 func main() {
-	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
+	logBuffer := NewLogBuffer(defaultLogEntryLimit)
+	logger := slog.New(NewBufferedHandler(
+		slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}),
+		logBuffer,
+	))
 
 	mediaPath := envOrDefault("MEDIA_PATH", "/media")
 	dbPath := envOrDefault("DB_PATH", "/data/collectarr.db")
@@ -31,7 +35,7 @@ func main() {
 	}
 
 	scanner := NewScanner(mediaPath, store, logger)
-	api := NewAPI(store, scanner, logger)
+	api := NewAPI(store, scanner, logger, logBuffer)
 
 	server := &http.Server{
 		Addr:              ":" + port,
