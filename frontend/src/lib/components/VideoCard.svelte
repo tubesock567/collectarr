@@ -120,7 +120,7 @@
 		{#if selectable}
 			<button
 				type="button"
-				class="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center border border-white/40 bg-black/80 text-white transition-all hover:border-white hover:bg-black {selected ? 'border-white bg-white text-black hover:bg-white' : ''}"
+				class="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center border transition-all {selected ? 'border-white bg-black text-white hover:bg-black' : 'border-white/40 bg-black/80 text-white hover:border-white hover:bg-black'}"
 				onclick={handleSelectionButtonClick}
 				aria-label={selected ? `Deselect ${video.title}` : `Select ${video.title}`}
 			>

@@ -604,11 +604,8 @@
 			</div>
 		</div>
 	{:else}
-		<div class="text-xs text-neutral-500 uppercase tracking-wider mb-4 flex flex-wrap items-center justify-between gap-2">
+		<div class="text-xs text-neutral-500 uppercase tracking-wider mb-4 flex flex-wrap items-center gap-2">
 			<span>Showing {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredVideos.length)} of {filteredVideos.length} videos</span>
-			{#if selectedCount > 0}
-				<span class="text-white">{selectedCount} selected</span>
-			{/if}
 		</div>
 
 		<div class="grid {getColumnClass(columnCount)} gap-6">
