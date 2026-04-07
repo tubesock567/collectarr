@@ -1,7 +1,12 @@
 <script>
 	import { preferences } from '$lib/preferences';
 
-	let { video } = $props();
+	let {
+		video,
+		selectable = false,
+		selected = false,
+		onToggleSelect = () => {}
+	} = $props();
 
 	let previewEl = $state(null);
 	let hovered = $state(false);
@@ -44,17 +49,35 @@
 	function handlePreviewError() {
 		previewFailed = true;
 	}
+
+	function handleSelectionToggle(event) {
+		event.preventDefault();
+		event.stopPropagation();
+		onToggleSelect(video.id);
+	}
 </script>
 
-<a
-	href={`/player/${video.id}`}
-	class="group flex flex-col space-y-3 cursor-pointer"
-	onmouseenter={startHover}
-	onmouseleave={stopHover}
-	onfocus={startHover}
-	onblur={stopHover}
->
-	<div class="w-full aspect-video bg-neutral-900 border border-neutral-800 overflow-hidden relative group-hover:border-neutral-500 transition-colors duration-300">
+<div class="group relative flex flex-col space-y-3 cursor-pointer">
+	{#if selectable}
+		<button
+			type="button"
+			class="absolute right-2 top-2 z-10 flex h-6 min-w-6 items-center justify-center border px-1.5 text-[10px] font-mono uppercase tracking-[0.2em] transition-colors {selected ? 'border-white bg-white text-black' : 'border-white/25 bg-black/75 text-white hover:border-white/60 hover:bg-black'}"
+			onclick={handleSelectionToggle}
+			aria-label={selected ? `Deselect ${video.title}` : `Select ${video.title}`}
+		>
+			{selected ? '✓' : '+'}
+		</button>
+	{/if}
+
+	<a
+		href={`/player/${video.id}`}
+		class="flex flex-col space-y-3"
+		onmouseenter={startHover}
+		onmouseleave={stopHover}
+		onfocus={startHover}
+		onblur={stopHover}
+	>
+	<div class="w-full aspect-video bg-neutral-900 border overflow-hidden relative transition-colors duration-300 {selected ? 'border-white' : 'border-neutral-800 group-hover:border-neutral-500'}">
 		<img
 			src={`/api/video/${video.id}/thumbnail`}
 			alt={video.title}
@@ -109,9 +132,10 @@
 		<h3 class="text-white text-sm font-medium leading-snug group-hover:text-gray-300 line-clamp-2 transition-colors">{video.title}</h3>
 		<p class="text-neutral-600 text-xs tracking-wider uppercase">{formatDate(video.date_added)}</p>
 	</div>
-</a>
+	</a>
+</div>
 
-<script context="module">
+<script module>
 	function formatDuration(seconds) {
 		if (!seconds || isNaN(seconds)) return '0:00';
 		const mins = Math.floor(seconds / 60);
