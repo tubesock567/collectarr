@@ -131,6 +131,13 @@ type VideoMetadataOptionsResponse struct {
 	Actors []string `json:"actors"`
 }
 
+type SettingsMetadataUpdateRequest struct {
+	AddTags      []string `json:"add_tags"`
+	RemoveTags   []string `json:"remove_tags"`
+	AddActors    []string `json:"add_actors"`
+	RemoveActors []string `json:"remove_actors"`
+}
+
 type BulkVideoMetadataUpdateResponse struct {
 	UpdatedCount  int          `json:"updated_count"`
 	UpdatedGroups []VideoGroup `json:"updated_groups"`

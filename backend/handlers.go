@@ -76,6 +76,8 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/directory", api.authMiddleware(http.HandlerFunc(api.handleDirectoryListing))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/settings/media-path", api.authMiddleware(http.HandlerFunc(api.handleGetMediaPath))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/settings/media-path", api.authMiddleware(http.HandlerFunc(api.handleSetMediaPath))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/settings/metadata", api.authMiddleware(http.HandlerFunc(api.handleGetSettingsMetadata))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/settings/metadata", api.authMiddleware(http.HandlerFunc(api.handleUpdateSettingsMetadata))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/settings/generation", api.authMiddleware(http.HandlerFunc(api.handleGetGenerationSettings))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/settings/generation", api.authMiddleware(http.HandlerFunc(api.handleSetGenerationSettings))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/admin/clear-database", api.authMiddleware(http.HandlerFunc(api.handleClearDatabase))).Methods(http.MethodPost, http.MethodOptions)
@@ -331,6 +333,34 @@ func (api *API) handleBulkUpdateVideoMetadata(w http.ResponseWriter, r *http.Req
 		UpdatedCount:  len(updatedGroups),
 		UpdatedGroups: updatedGroups,
 	})
+}
+
+func (api *API) handleGetSettingsMetadata(w http.ResponseWriter, r *http.Request) {
+	options, err := api.store.ListMetadataCatalog()
+	if err != nil {
+		api.logger.Error("get settings metadata options failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load settings metadata"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, options)
+}
+
+func (api *API) handleUpdateSettingsMetadata(w http.ResponseWriter, r *http.Request) {
+	var req SettingsMetadataUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid settings metadata payload"})
+		return
+	}
+
+	options, err := api.store.UpdateMetadataCatalog(req.AddTags, req.RemoveTags, req.AddActors, req.RemoveActors)
+	if err != nil {
+		api.logger.Error("update settings metadata failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to update settings metadata"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, options)
 }
 
 func (api *API) handleScan(w http.ResponseWriter, r *http.Request) {
