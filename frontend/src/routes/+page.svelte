@@ -193,7 +193,6 @@
 			selectedVideoIds = selectedVideoIds.filter((videoId) => videoId !== id);
 		} else {
 			selectedVideoIds = [...selectedVideoIds, id];
-			showMetadataPanel = true;
 		}
 		metadataMessage = '';
 	}
@@ -245,13 +244,6 @@
 		showMetadataPanel = false;
 		metadataMessage = '';
 		resetBulkDrafts();
-	}
-
-	function toggleSelectionMode() {
-		selectionMode = !selectionMode;
-		if (!selectionMode) {
-			clearSelection();
-		}
 	}
 
 	function mergeUpdatedGroups(updatedGroups) {
@@ -387,12 +379,6 @@
 	});
 
 	$effect(() => {
-		if (!selectionMode && selectedVideoIds.length > 0) {
-			clearSelection();
-		}
-	});
-
-	$effect(() => {
 		const video = singleSelectedVideo;
 		if (!video) {
 			return;
@@ -401,6 +387,13 @@
 		singleActorsDraft = [...(video.actors || [])];
 		metadataMessage = '';
 	});
+
+	function toggleSelectionMode() {
+		selectionMode = !selectionMode;
+		if (!selectionMode) {
+			clearSelection();
+		}
+	}
 
 	onMount(() => {
 		document.addEventListener('click', handleClickOutside);
@@ -425,7 +418,7 @@
 	<title>Collectarr - Library</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 {selectedCount > 0 && showMetadataPanel ? 'xl:pr-[28rem]' : ''}">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 	<div class="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
 		<div class="flex items-center gap-3">
 			<button
@@ -460,14 +453,6 @@
 			</button>
 		</div>
 		<div class="flex items-center gap-3 flex-wrap sm:justify-end">
-			<button
-				class="h-9 px-3 text-xs uppercase tracking-wider border rounded-none transition-colors {selectionMode ? 'border-white bg-white text-black' : 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}"
-				onclick={toggleSelectionMode}
-				aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
-			>
-				{selectionMode ? 'Selection on' : 'Select'}
-			</button>
-
 			<label class="flex items-center h-9 border border-neutral-800 bg-black text-white rounded-none overflow-hidden focus-within:border-neutral-500 transition-colors">
 				<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-500 border-r border-neutral-800 h-full flex items-center shrink-0">Search</span>
 				<input
@@ -544,6 +529,14 @@
 					</div>
 				{/if}
 			</div>
+
+			<button
+				class="h-9 px-3 text-xs uppercase tracking-wider border rounded-none transition-colors {selectionMode ? 'border-white bg-white text-black' : 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}"
+				onclick={toggleSelectionMode}
+				aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+			>
+				{selectionMode ? 'Selection on' : 'Select'}
+			</button>
 		</div>
 	</div>
 
@@ -569,8 +562,8 @@
 						{allFilteredSelected ? 'Deselect filtered' : 'Select filtered'}
 					</button>
 					{#if selectedCount > 0}
-						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white rounded-none hover:border-neutral-400 transition-colors" onclick={() => showMetadataPanel = !showMetadataPanel}>
-							{showMetadataPanel ? 'Hide editor' : 'Edit selection'}
+						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white rounded-none hover:border-neutral-400 transition-colors" onclick={() => showMetadataPanel = true}>
+							Edit selection
 						</button>
 						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-700 text-neutral-300 rounded-none hover:border-neutral-400 hover:text-white transition-colors" onclick={clearSelection}>
 							Clear
@@ -653,9 +646,9 @@
 	{/if}
 </div>
 
-{#if selectionMode && selectedCount > 0}
-	<div class="fixed inset-y-0 right-0 z-40 w-full max-w-md border-l border-neutral-800 bg-black/95 shadow-2xl backdrop-blur transition-transform duration-300 {showMetadataPanel ? 'translate-x-0' : 'translate-x-full'}">
-		<div class="flex h-full flex-col">
+{#if selectionMode && selectedCount > 0 && showMetadataPanel}
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onclick={(e) => { if (e.target === e.currentTarget) showMetadataPanel = false; }}>
+		<div class="w-full max-w-2xl max-h-[90vh] overflow-hidden border border-neutral-800 bg-black shadow-2xl">
 			<div class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5">
 				<div>
 					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Metadata Editor</p>
@@ -672,7 +665,7 @@
 				</button>
 			</div>
 
-			<div class="flex-1 overflow-y-auto px-6 py-5 text-sm text-white/80">
+			<div class="overflow-y-auto px-6 py-5 text-sm text-white/80 max-h-[calc(90vh-140px)]">
 				{#if selectedCount === 1}
 					<div class="space-y-6">
 						<div class="grid gap-4 border border-neutral-800 bg-neutral-950/60 p-4 text-sm">
@@ -709,49 +702,51 @@
 							<p class="mt-2 text-white">Bulk updates are non-destructive: add tags and actors to every selected group, or remove specific ones across the whole selection.</p>
 						</div>
 
-						<MetadataTokenInput
-							label="Add Tags"
-							values={bulkAddTags}
-							suggestions={metadataOptions.tags}
-							excludeValues={bulkRemoveTags}
-							placeholder="Type tags to add"
-							helpText="Every selected group will gain these tags."
-							disabled={savingMetadata}
-							onChange={handleBulkAddTagsChange}
-						/>
+						<div class="grid gap-6 lg:grid-cols-2">
+							<MetadataTokenInput
+								label="Add Tags"
+								values={bulkAddTags}
+								suggestions={metadataOptions.tags}
+								excludeValues={bulkRemoveTags}
+								placeholder="Type tags to add"
+								helpText="Every selected group will gain these tags."
+								disabled={savingMetadata}
+								onChange={handleBulkAddTagsChange}
+							/>
 
-						<MetadataTokenInput
-							label="Remove Tags"
-							values={bulkRemoveTags}
-							suggestions={metadataOptions.tags}
-							excludeValues={bulkAddTags}
-							placeholder="Type tags to remove"
-							helpText="Matching tags will be removed from every selected group. Tags already queued for add are hidden here."
-							disabled={savingMetadata}
-							onChange={handleBulkRemoveTagsChange}
-						/>
+							<MetadataTokenInput
+								label="Remove Tags"
+								values={bulkRemoveTags}
+								suggestions={metadataOptions.tags}
+								excludeValues={bulkAddTags}
+								placeholder="Type tags to remove"
+								helpText="Matching tags will be removed from every selected group."
+								disabled={savingMetadata}
+								onChange={handleBulkRemoveTagsChange}
+							/>
 
-						<MetadataTokenInput
-							label="Add Actors / Actresses"
-							values={bulkAddActors}
-							suggestions={metadataOptions.actors}
-							excludeValues={bulkRemoveActors}
-							placeholder="Type actors to add"
-							helpText="Every selected group will gain these names."
-							disabled={savingMetadata}
-							onChange={handleBulkAddActorsChange}
-						/>
+							<MetadataTokenInput
+								label="Add Actors / Actresses"
+								values={bulkAddActors}
+								suggestions={metadataOptions.actors}
+								excludeValues={bulkRemoveActors}
+								placeholder="Type actors to add"
+								helpText="Every selected group will gain these names."
+								disabled={savingMetadata}
+								onChange={handleBulkAddActorsChange}
+							/>
 
-						<MetadataTokenInput
-							label="Remove Actors / Actresses"
-							values={bulkRemoveActors}
-							suggestions={metadataOptions.actors}
-							excludeValues={bulkAddActors}
-							placeholder="Type actors to remove"
-							helpText="Matching names will be removed from every selected group. Names already queued for add are hidden here."
-							disabled={savingMetadata}
-							onChange={handleBulkRemoveActorsChange}
-						/>
+							<MetadataTokenInput
+								label="Remove Actors / Actresses"
+								values={bulkRemoveActors}
+								suggestions={metadataOptions.actors}
+								excludeValues={bulkAddActors}
+								placeholder="Type actors to remove"
+								helpText="Matching names will be removed from every selected group."
+								disabled={savingMetadata}
+								onChange={handleBulkRemoveActorsChange}
+							/>
+						</div>
 					</div>
 				{/if}
 			</div>
@@ -771,8 +766,8 @@
 							Apply Bulk Update
 						{/if}
 					</button>
-					<button class="border border-neutral-700 px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white" onclick={clearSelection}>
-						Clear Selection
+					<button class="border border-neutral-700 px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white" onclick={() => showMetadataPanel = false}>
+						Cancel
 					</button>
 				</div>
 				{#if metadataMessage}
