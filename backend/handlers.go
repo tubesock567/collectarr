@@ -746,10 +746,10 @@ func (api *API) ensurePreviewSprite(parent context.Context, video Video) (Previe
 		}
 	}
 
-	const frameWidth = 240
-	const frameHeight = 135
-	const columns = 3
-	const sampleCount = 9
+	const frameWidth = 120
+	const frameHeight = 68
+	const columns = 8
+	const sampleCount = 40
 	rows := int(math.Ceil(float64(sampleCount) / float64(columns)))
 	timestamps := api.samplePreviewTimestamps(video.Duration, sampleCount)
 
@@ -831,7 +831,7 @@ func (api *API) ensureHoverPreview(parent context.Context, video Video) (string,
 		return previewPath, nil
 	}
 
-	segmentCount := 4
+	segmentCount := 12
 	const segmentDuration = 1.5
 	if video.Duration > 0 {
 		segmentCount = max(1, min(segmentCount, int(math.Ceil(float64(video.Duration)/segmentDuration))))
