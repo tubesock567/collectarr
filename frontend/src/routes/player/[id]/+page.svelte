@@ -1,5 +1,6 @@
 <script>
 	import { authFetch } from '$lib/auth';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { onMount, onDestroy } from 'svelte';
 	
@@ -102,12 +103,16 @@
 				e.preventDefault();
 				volume = Math.max(0, volume - 0.1);
 				break;
-			case 'm':
-			case 'M':
-				e.preventDefault();
-				muted = !muted;
-				break;
-		}
+		case 'm':
+		case 'M':
+			e.preventDefault();
+			muted = !muted;
+			break;
+		case 'Escape':
+			e.preventDefault();
+			goto('/');
+			break;
+	}
 	}
 	
 	function seek(e) {
