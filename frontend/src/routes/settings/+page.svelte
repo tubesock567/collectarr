@@ -2,6 +2,7 @@
 	import { auth, authFetch } from '$lib/auth';
 	import { onMount } from 'svelte';
 	import DirectoryBrowser from '$lib/components/DirectoryBrowser.svelte';
+	import { preferences } from '$lib/preferences';
 	import { theme } from '$lib/theme';
 
 	let activeTab = $state('account');
@@ -19,6 +20,10 @@
 	let newMediaPath = $state('');
 	let savingMediaPath = $state(false);
 	let mediaPathMessage = $state('');
+	let generateScrubberSprites = $state(false);
+	let generateHoverPreviews = $state(false);
+	let savingGenerationSettings = $state(false);
+	let generationMessage = $state('');
 	let clearingDatabase = $state(false);
 	let clearDatabaseMessage = $state('');
 	let showMediaBrowser = $state(false);
@@ -34,11 +39,19 @@
 
 	onMount(async () => {
 		try {
-			const mediaPathRes = await authFetch('/api/settings/media-path');
+			const [mediaPathRes, generationRes] = await Promise.all([
+				authFetch('/api/settings/media-path'),
+				authFetch('/api/settings/generation')
+			]);
 			if (!mediaPathRes.ok) throw new Error(await readError(mediaPathRes, 'Failed to load media path'));
 			const mediaPathData = await mediaPathRes.json();
 			mediaPath = mediaPathData?.path || '';
 			newMediaPath = mediaPathData?.path || '';
+
+			if (!generationRes.ok) throw new Error(await readError(generationRes, 'Failed to load generation settings'));
+			const generationData = await generationRes.json();
+			generateScrubberSprites = Boolean(generationData?.generate_scrubber_sprites);
+			generateHoverPreviews = Boolean(generationData?.generate_hover_previews);
 		} catch (err) {
 			mediaPathMessage = `Error: ${err.message}`;
 		}
@@ -148,6 +161,28 @@
 		}
 	}
 
+	async function saveGenerationSettings() {
+		if (savingGenerationSettings) return;
+		savingGenerationSettings = true;
+		generationMessage = '';
+
+		try {
+			const res = await authFetch('/api/settings/generation', {
+				method: 'POST',
+				body: JSON.stringify({
+					generate_scrubber_sprites: generateScrubberSprites,
+					generate_hover_previews: generateHoverPreviews
+				})
+			});
+			if (!res.ok) throw new Error(await readError(res, 'Failed to save generation settings'));
+			generationMessage = 'Generation settings updated successfully.';
+		} catch (err) {
+			generationMessage = `Error: ${err.message}`;
+		} finally {
+			savingGenerationSettings = false;
+		}
+	}
+
 	async function clearDatabase() {
 		if (clearingDatabase) return;
 		if (!confirm('Are you sure you want to clear the library database? This will remove all video metadata but will not delete any files.')) {
@@ -212,6 +247,12 @@
 						class="px-4 py-2 text-xs uppercase tracking-widest border transition-colors { $theme === 'light' ? 'bg-white text-black border-white' : 'border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-500' }"
 					>
 						Light
+					</button>
+					<button
+						onclick={() => preferences.setIncognito(!$preferences.incognito)}
+						class="px-4 py-2 text-xs uppercase tracking-widest border transition-colors { $preferences.incognito ? 'bg-white text-black border-white' : 'border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-500' }"
+					>
+						Incognito {$preferences.incognito ? 'On' : 'Off'}
 					</button>
 				</div>
 			</section>
@@ -313,6 +354,52 @@
 				{#if mediaPathMessage}
 					<p class="text-xs tracking-wide {mediaPathMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
 						{mediaPathMessage}
+					</p>
+				{/if}
+			</section>
+
+			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
+				<div>
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Preview Generation</h2>
+					<p class="text-xs text-neutral-500">Choose which preview assets should be generated automatically during media scans.</p>
+				</div>
+
+				<div class="w-full grid gap-4">
+					<label class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3">
+						<div>
+							<p class="text-sm text-white uppercase tracking-widest">Scrubber Sprites</p>
+							<p class="text-xs text-neutral-500 mt-1">Pre-generate seek-bar sprite sheets for the player during scans.</p>
+						</div>
+						<input type="checkbox" bind:checked={generateScrubberSprites} class="toggle toggle-sm rounded-none" />
+					</label>
+
+					<label class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3">
+						<div>
+							<p class="text-sm text-white uppercase tracking-widest">Hover Previews</p>
+							<p class="text-xs text-neutral-500 mt-1">Pre-generate short hover preview clips from different parts of each video during scans.</p>
+						</div>
+						<input type="checkbox" bind:checked={generateHoverPreviews} class="toggle toggle-sm rounded-none" />
+					</label>
+				</div>
+
+				<p class="text-xs text-neutral-500">These toggles control background generation during scans. On-demand previews can still be generated when you open the player or hover a card.</p>
+
+				<button
+					onclick={saveGenerationSettings}
+					disabled={savingGenerationSettings}
+					class="mt-2 bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
+				>
+					{#if savingGenerationSettings}
+						<span class="loading loading-spinner loading-xs"></span>
+						Saving...
+					{:else}
+						Save Generation Settings
+					{/if}
+				</button>
+
+				{#if generationMessage}
+					<p class="text-xs tracking-wide {generationMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
+						{generationMessage}
 					</p>
 				{/if}
 			</section>
