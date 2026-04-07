@@ -14,7 +14,6 @@
 	let paused = $state(true);
 	let volume = $state(1);
 	let muted = $state(false);
-	let previewEnabled = $state(true);
 	let previewLoading = $state(false);
 	let previewData = $state(null);
 	let previewError = $state(null);
@@ -155,17 +154,6 @@
 
 	function updateSelectedVariant(id) {
 		selectedVariantId = Number(id);
-		previewEnabled = true;
-	}
-
-	function togglePreviewMode() {
-		previewEnabled = !previewEnabled;
-		if (previewEnabled && !previewData && !previewLoading && selectedVariantId) {
-			loadPreviewData(selectedVariantId);
-		}
-		if (!previewEnabled) {
-			clearSeekHover();
-		}
 	}
 
 	async function loadPreviewData(variantId) {
@@ -178,7 +166,6 @@
 			const res = await authFetch(`/api/video/${variantId}/preview`);
 			if (res.status === 501) {
 				previewData = null;
-				previewEnabled = false;
 				return;
 			}
 			if (!res.ok) throw new Error('Failed to load preview data');
@@ -195,7 +182,6 @@
 		} catch (err) {
 			previewError = err.message;
 			previewData = null;
-			previewEnabled = false;
 		} finally {
 			previewLoading = false;
 		}
@@ -370,17 +356,6 @@
 			</div>
 
 			<div class="flex items-center gap-6">
-				<label class="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/70">
-					<span>Preview</span>
-					<button
-						type="button"
-						onclick={togglePreviewMode}
-						class="border border-white/20 px-3 py-2 text-white transition-colors hover:border-white/50 {previewEnabled ? 'bg-white text-black' : 'bg-black/50'}"
-					>
-						{previewLoading ? 'Loading' : (previewEnabled && previewData ? 'On' : 'Off')}
-					</button>
-				</label>
-
 				{#if video?.variants?.length > 1}
 					<label class="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/70">
 						<span>Quality</span>
