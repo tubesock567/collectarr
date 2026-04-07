@@ -22,6 +22,7 @@
 	let hoverTime = $state(0);
 	let hoverPreviewIndex = $state(-1);
 	let showingPreview = $state(false);
+	let showInfoPanel = $state(false);
 	
 	let showControls = $state(true);
 	let hideTimer = null;
@@ -54,8 +55,29 @@
 		}
 	}
 
+	function toggleInfoPanel() {
+		showInfoPanel = !showInfoPanel;
+		if (showInfoPanel) {
+			showControls = true;
+			if (hideTimer) clearTimeout(hideTimer);
+		} else if (!paused) {
+			resetTimer();
+		}
+	}
+
 	function handleKeydown(e) {
 		if (loading || loadError) return;
+		const target = e.target;
+		if (target instanceof HTMLElement) {
+			const tagName = target.tagName;
+			if (target.isContentEditable || tagName === 'INPUT' || tagName === 'TEXTAREA' || tagName === 'SELECT' || tagName === 'BUTTON') {
+				if (e.key === 'Escape' && showInfoPanel) {
+					e.preventDefault();
+					showInfoPanel = false;
+				}
+				return;
+			}
+		}
 		resetTimer();
 		switch(e.key) {
 			case ' ':
@@ -109,8 +131,11 @@
 			muted = !muted;
 			break;
 		case 'Escape':
-			e.preventDefault();
-			goto('/');
+			if (showInfoPanel) {
+				e.preventDefault();
+				showInfoPanel = false;
+				break;
+			}
 			break;
 	}
 	}
@@ -155,6 +180,13 @@
 		const mins = Math.floor(seconds / 60);
 		const secs = Math.floor(seconds % 60);
 		return `${mins}:${secs.toString().padStart(2, '0')}`;
+	}
+
+	function formatDate(value) {
+		if (!value) return 'Unknown';
+		const date = new Date(value);
+		if (Number.isNaN(date.getTime())) return 'Unknown';
+		return date.toLocaleString();
 	}
 
 	function updateSelectedVariant(id) {
@@ -254,10 +286,21 @@
 >
 	<a 
 		href="/" 
-		class="absolute top-6 left-6 z-50 text-white/50 hover:text-white uppercase tracking-widest text-xs font-bold px-4 py-2 border border-white/20 hover:border-white/50 transition-all bg-black/50 backdrop-blur {showControls ? 'opacity-100' : 'opacity-0'} duration-300"
+		class="absolute top-6 left-6 z-50 text-white/50 hover:text-white uppercase tracking-widest text-xs font-bold px-4 py-2 border border-white/20 hover:border-white/50 transition-all bg-black/50 backdrop-blur {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
 	>
 		&larr; Back
 	</a>
+
+	<button
+		class="absolute top-6 right-6 z-30 flex items-center gap-2 text-white/50 hover:text-white uppercase tracking-widest text-xs font-bold px-4 py-2 border border-white/20 hover:border-white/50 transition-all bg-black/50 backdrop-blur {(showControls || showInfoPanel) ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
+		aria-label={showInfoPanel ? 'Hide video details' : 'Show video details'}
+		onclick={toggleInfoPanel}
+	>
+		<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+			<path d="M11 7h2V5h-2v2zm0 12h2v-8h-2v8zm1-17C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2z" />
+		</svg>
+		Info
+	</button>
 
 	{#if loading}
 		<div class="absolute inset-0 flex items-center justify-center text-white uppercase tracking-[0.3em] text-sm z-40">
@@ -282,11 +325,70 @@
 		bind:muted
 		src={videoSrc}
 		class="w-full h-full object-contain cursor-pointer"
-		autoplay
 		onclick={togglePlay}
 	>
 		<track kind="captions" />
 	</video>
+
+	<div class="absolute inset-y-0 right-0 z-40 w-full max-w-sm border-l border-white/10 bg-black/90 backdrop-blur-md transition-transform duration-300 {showInfoPanel ? 'translate-x-0' : 'translate-x-full'}">
+		<div class="flex h-full flex-col">
+			<div class="flex items-start justify-between gap-4 border-b border-white/10 px-6 py-5">
+				<div>
+					<p class="text-[10px] uppercase tracking-[0.3em] text-white/50">Video Details</p>
+					<h2 class="mt-2 text-lg font-semibold text-white">{video?.title || 'Unknown title'}</h2>
+				</div>
+				<button
+					class="mt-0.5 text-white/50 hover:text-white transition-colors"
+					aria-label="Close video details"
+					onclick={() => showInfoPanel = false}
+				>
+					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z" />
+					</svg>
+				</button>
+			</div>
+
+			<div class="flex-1 space-y-6 overflow-y-auto px-6 py-5 text-sm text-white/80">
+				<div class="grid gap-4">
+					<div>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Duration</p>
+						<p class="mt-2 text-white">{formatTime(video?.duration || 0)}</p>
+					</div>
+					<div>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Date Added</p>
+						<p class="mt-2 text-white">{formatDate(video?.date_added)}</p>
+					</div>
+					<div>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Last Scanned</p>
+						<p class="mt-2 text-white">{formatDate(video?.date_scanned)}</p>
+					</div>
+					<div>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Current Quality</p>
+						<p class="mt-2 text-white">{video?.variants?.find((variant) => variant.id === selectedVariantId)?.quality || 'Original'}</p>
+					</div>
+				</div>
+
+				<div>
+					<p class="text-[10px] uppercase tracking-[0.3em] text-white/40">Available Variants</p>
+					<div class="mt-3 space-y-2">
+						{#each video?.variants || [] as variant (variant.id)}
+							<div class="border border-white/10 bg-white/5 px-4 py-3">
+								<div class="flex items-start justify-between gap-3">
+									<div>
+										<p class="text-white">{variant.quality || 'Original'}</p>
+										<p class="mt-1 break-all text-xs text-white/45">{variant.filename}</p>
+									</div>
+									{#if variant.id === selectedVariantId}
+										<span class="border border-white/20 px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-white/60">Playing</span>
+									{/if}
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			</div>
+		</div>
+	</div>
 
 	{#if paused}
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
@@ -306,7 +408,7 @@
 	{/if}
 
 	<div 
-		class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-12 transition-opacity duration-300 {showControls ? 'opacity-100' : 'opacity-0'}"
+		class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-12 transition-opacity duration-300 {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}"
 	>
 		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div 
