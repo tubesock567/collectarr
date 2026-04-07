@@ -15,7 +15,6 @@ func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: slog.LevelInfo}))
 
 	mediaPath := envOrDefault("MEDIA_PATH", "/media")
-	hardlinkRoot := envOrDefault("HARDLINK_DESTINATION_PATH", "/hardlink_destination")
 	dbPath := envOrDefault("DB_PATH", "/data/collectarr.db")
 	port := envOrDefault("PORT", "8080")
 	autoScan := envOrDefault("AUTO_SCAN", "true") == "true"
@@ -44,7 +43,7 @@ func main() {
 		logger.Info("auto scan disabled, skipping startup scan")
 	}
 
-	api := NewAPI(store, scanner, hardlinkRoot, logger)
+	api := NewAPI(store, scanner, logger)
 	server := &http.Server{
 		Addr:              ":" + port,
 		Handler:           api.Router(),
@@ -52,7 +51,7 @@ func main() {
 	}
 
 	go func() {
-		logger.Info("backend listening", "port", port, "media_path", mediaPath, "hardlink_root", hardlinkRoot, "db_path", dbPath)
+		logger.Info("backend listening", "port", port, "media_path", mediaPath, "db_path", dbPath)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			logger.Error("server failed", "error", err)
 			os.Exit(1)
