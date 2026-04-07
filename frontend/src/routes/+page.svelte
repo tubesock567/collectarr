@@ -30,7 +30,15 @@
         return videos.filter((video) => {
             const title = (video.title || '').toLowerCase();
             const addedDate = (video.date_added || '').toLowerCase();
-            return title.includes(query) || addedDate.includes(query);
+            const tags = video.tags || [];
+            const actors = video.actors || [];
+            
+            const titleMatch = title.includes(query);
+            const dateMatch = addedDate.includes(query);
+            const tagsMatch = tags.some((tag) => tag.toLowerCase().includes(query));
+            const actorsMatch = actors.some((actor) => actor.toLowerCase().includes(query));
+            
+            return titleMatch || dateMatch || tagsMatch || actorsMatch;
         });
     });
 
@@ -206,7 +214,7 @@
 					type="search"
 					value={searchQuery}
 					oninput={handleSearchInput}
-					placeholder="Title or date added"
+					placeholder="Title, date, tags, actors"
 					class="w-56 sm:w-64 md:w-72 h-full bg-black px-3 text-sm text-white placeholder:text-neutral-600 outline-none focus:border-neutral-500"
 					aria-label="Search videos"
 				/>
