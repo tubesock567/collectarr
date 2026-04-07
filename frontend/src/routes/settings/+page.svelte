@@ -2,6 +2,7 @@
 	import { auth, authFetch } from '$lib/auth';
 	import { onMount } from 'svelte';
 	import DirectoryBrowser from '$lib/components/DirectoryBrowser.svelte';
+	import { theme } from '$lib/theme';
 
 	let activeTab = $state('account');
 
@@ -193,6 +194,28 @@
 
 	{#if activeTab === 'account'}
 		<div class="space-y-8">
+			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
+				<div>
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Appearance</h2>
+					<p class="text-xs text-neutral-500">Choose how Collectarr should look across the app.</p>
+				</div>
+
+				<div class="flex flex-wrap gap-3">
+					<button
+						onclick={() => theme.setTheme('dark')}
+						class="px-4 py-2 text-xs uppercase tracking-widest border transition-colors { $theme === 'dark' ? 'bg-white text-black border-white' : 'border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-500' }"
+					>
+						Dark
+					</button>
+					<button
+						onclick={() => theme.setTheme('light')}
+						class="px-4 py-2 text-xs uppercase tracking-widest border transition-colors { $theme === 'light' ? 'bg-white text-black border-white' : 'border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-500' }"
+					>
+						Light
+					</button>
+				</div>
+			</section>
+
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Password</h2>

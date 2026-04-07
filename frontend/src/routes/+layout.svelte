@@ -5,11 +5,13 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { auth, checkAuth, logout } from '$lib/auth';
+	import { theme } from '$lib/theme';
 
 	let { children } = $props();
 
 	onMount(() => {
 		checkAuth();
+		theme.initTheme();
 	});
 
 	$effect(() => {
@@ -38,6 +40,9 @@
 			{#if $auth.isAuthenticated}
 				<span class="text-[10px] font-semibold tracking-[0.25em] uppercase text-neutral-500">{$auth.username}</span>
 			{/if}
+			<button class="text-xs font-semibold tracking-widest uppercase text-neutral-500 hover:text-white transition-colors" onclick={() => theme.toggleTheme($theme)}>
+				{$theme === 'light' ? 'Dark Mode' : 'Light Mode'}
+			</button>
 			<a href="/" class="text-xs font-semibold tracking-widest uppercase {$page.url.pathname === '/' ? 'text-white' : 'text-neutral-500'} hover:text-white transition-colors">Library</a>
 			<a href="/settings" class="text-xs font-semibold tracking-widest uppercase {$page.url.pathname === '/settings' ? 'text-white' : 'text-neutral-500'} hover:text-white transition-colors">Settings</a>
 			{#if $auth.isAuthenticated}
