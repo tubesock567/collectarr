@@ -482,12 +482,14 @@
 
 <DirectoryBrowser
 	bind:isOpen={showMediaBrowser}
+	endpoint="/api/directory"
 	title="Select Media Path"
 	onSelect={(path) => { newMediaPath = path; }}
 />
 
 <DirectoryBrowser
 	bind:isOpen={showHardlinkBrowser}
+	endpoint="/api/hardlink-directory"
 	title="Select Hard Link Destination"
 	onSelect={(path) => { newDestination = path; }}
 />
