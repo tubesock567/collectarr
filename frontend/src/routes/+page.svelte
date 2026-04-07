@@ -8,6 +8,7 @@
     let videos = $state([]);
     let loading = $state(true);
     let error = $state(null);
+    let searchQuery = $state('');
     let sortBy = $state('dateAdded');
     let sortOrder = $state('desc');
     let columnCount = $state(4);
@@ -18,10 +19,25 @@
     let sortDropdownEl = $state(null);
     let columnDropdownEl = $state(null);
 
-    const totalPages = $derived(() => Math.ceil(videos.length / itemsPerPage));
+    const normalizedSearchQuery = $derived(searchQuery.trim().toLowerCase());
+
+    const filteredVideos = $derived(() => {
+        const query = normalizedSearchQuery();
+        if (!query) {
+            return videos;
+        }
+
+        return videos.filter((video) => {
+            const title = (video.title || '').toLowerCase();
+            const addedDate = (video.date_added || '').toLowerCase();
+            return title.includes(query) || addedDate.includes(query);
+        });
+    });
+
+    const totalPages = $derived(() => Math.max(1, Math.ceil(filteredVideos().length / itemsPerPage)));
 
     const sortedVideos = $derived(() => {
-        const sorted = [...videos];
+        const sorted = [...filteredVideos()];
         sorted.sort((a, b) => {
             let valA, valB;
             if (sortBy === 'duration') {
@@ -60,11 +76,13 @@
 
     function toggleSortOrder() {
         sortOrder = sortOrder === 'asc' ? 'desc' : 'asc';
+        currentPage = 1;
     }
 
     function setColumnCount(count) {
         columnCount = count;
         showColumnDropdown = false;
+        currentPage = 1;
     }
 
     function goToPage(page) {
@@ -101,6 +119,18 @@
         }
     }
 
+    $effect(() => {
+        normalizedSearchQuery();
+        currentPage = 1;
+    });
+
+    $effect(() => {
+        const pageCount = totalPages();
+        if (currentPage > pageCount) {
+            currentPage = pageCount;
+        }
+    });
+
 	async function readError(res, fallback) {
 		try {
 			const data = await res.json();
@@ -136,6 +166,17 @@
 	<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
 		<h2 class="text-sm font-semibold uppercase tracking-widest text-white">Library</h2>
 		<div class="flex items-center gap-3 flex-wrap">
+			<label class="flex items-center h-9 border border-neutral-800 bg-black text-white rounded-none overflow-hidden focus-within:border-neutral-500 transition-colors">
+				<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-500 border-r border-neutral-800 h-full flex items-center shrink-0">Search</span>
+				<input
+					type="search"
+					bind:value={searchQuery}
+					placeholder="Title or date added"
+					class="w-56 sm:w-64 md:w-72 h-full bg-black px-3 text-sm text-white placeholder:text-neutral-600 outline-none focus:border-neutral-500"
+					aria-label="Search videos"
+				/>
+			</label>
+
 			<div class="relative" bind:this={sortDropdownEl}>
 				<button
 					class="flex items-center gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 rounded-none hover:border-neutral-400 transition-colors text-white bg-neutral-900"
@@ -262,9 +303,16 @@
 				<a href="/settings" class="btn btn-outline btn-sm text-white rounded-none uppercase tracking-widest text-xs">Go to Settings</a>
 			</div>
 		</div>
+	{:else if filteredVideos().length === 0}
+		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+			<div class="border border-neutral-800 bg-black p-12 flex flex-col items-center text-center max-w-md">
+				<p class="text-neutral-400 uppercase tracking-widest mb-4">No Matching Videos</p>
+				<p class="text-sm text-neutral-600">Try a different title or date-added search.</p>
+			</div>
+		</div>
 	{:else}
 		<div class="text-xs text-neutral-500 uppercase tracking-wider mb-4">
-			Showing {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, videos.length)} of {videos.length} videos
+			Showing {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredVideos().length)} of {filteredVideos().length} videos
 		</div>
 
 		<div class="grid {getColumnClass(columnCount)} gap-6">
