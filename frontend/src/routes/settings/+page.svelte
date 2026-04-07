@@ -79,25 +79,6 @@
 		}
 	}
 
-	async function generateThumbnails() {
-		if (generatingThumbs) return;
-		generatingThumbs = true;
-		thumbMessage = '';
-
-		try {
-			const res = await authFetch('/api/thumbnails/generate', { method: 'POST' });
-			if (!res.ok) throw new Error(await readError(res, 'Failed to start thumbnail generation'));
-			await res.json();
-			thumbMessage = 'Thumbnail generation started. This may take a while...';
-			setTimeout(() => {
-				generatingThumbs = false;
-			}, 3000);
-		} catch (err) {
-			thumbMessage = `Error: ${err.message}`;
-			generatingThumbs = false;
-		}
-	}
-
 	async function changePassword() {
 		if (changingPassword) return;
 		passwordMessage = '';
@@ -315,6 +296,32 @@
 		<div class="space-y-8">
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Library Management</h2>
+					<p class="text-xs text-neutral-500">Trigger a manual rescan of your media directory to discover new files.</p>
+				</div>
+				
+				<button 
+					onclick={scanLibrary}
+					disabled={scanning}
+					class="mt-2 bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
+				>
+					{#if scanning}
+						<span class="loading loading-spinner loading-xs"></span>
+						Scanning...
+					{:else}
+						Rescan Library
+					{/if}
+				</button>
+				
+				{#if message}
+					<p class="text-xs tracking-wide {message.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
+						{message}
+					</p>
+				{/if}
+			</section>
+
+			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
+				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Media Path</h2>
 					<p class="text-xs text-neutral-500">Configure the path to scan for media files.</p>
 				</div>
@@ -373,15 +380,19 @@
 					<p class="text-xs text-neutral-500">Configure and generate preview assets for your library.</p>
 				</div>
 
-				<div class="w-full grid gap-4">
-					<label class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3">
+				<div class="w-full border border-neutral-800 bg-neutral-900/30 p-4 rounded">
+					<label class="flex items-center justify-between gap-4">
 						<div>
 							<p class="text-sm text-white uppercase tracking-widest">Auto-generate during scans</p>
 							<p class="text-xs text-neutral-500 mt-1">Automatically generate preview assets when scanning the library.</p>
 						</div>
 						<input type="checkbox" bind:checked={selectedAutoGenerate} onchange={saveGenerationSettings} class="toggle toggle-sm rounded-none" />
 					</label>
+				</div>
 
+				<div class="w-full grid gap-4 border-t border-neutral-800 pt-4">
+					<p class="text-xs text-neutral-400 uppercase tracking-widest mb-2">Manual Generation Options</p>
+					
 					<label class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3">
 						<div>
 							<p class="text-sm text-white uppercase tracking-widest">Generate thumbnails</p>
@@ -416,33 +427,18 @@
 				<div class="w-full border-t border-neutral-800 pt-4 mt-2">
 					<p class="text-xs text-neutral-500 mb-4">Generate preview assets manually for all videos in your library.</p>
 					
-					<div class="flex flex-wrap gap-3">
-						<button
-							onclick={generateThumbnails}
-							disabled={generatingThumbs}
-							class="bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
-						>
-							{#if generatingThumbs}
-								<span class="loading loading-spinner loading-xs"></span>
-								Generating...
-							{:else}
-								Generate Thumbnails
-							{/if}
-						</button>
-
-						<button
-							onclick={generatePreviews}
-							disabled={generatingPreviews}
-							class="bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
-						>
-							{#if generatingPreviews}
-								<span class="loading loading-spinner loading-xs"></span>
-								Processing...
-							{:else}
-								Generate Previews
-							{/if}
-						</button>
-					</div>
+					<button
+						onclick={generatePreviews}
+						disabled={generatingPreviews}
+						class="bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
+					>
+						{#if generatingPreviews}
+							<span class="loading loading-spinner loading-xs"></span>
+							Processing...
+						{:else}
+							Generate Previews
+						{/if}
+					</button>
 
 					{#if previewGenMessage}
 						<p class="text-xs tracking-wide {previewGenMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-3">
@@ -450,32 +446,6 @@
 						</p>
 					{/if}
 				</div>
-			</section>
-
-			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
-				<div>
-					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Library Management</h2>
-					<p class="text-xs text-neutral-500">Trigger a manual rescan of your media directory to discover new files.</p>
-				</div>
-				
-				<button 
-					onclick={scanLibrary}
-					disabled={scanning}
-					class="mt-2 bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
-				>
-					{#if scanning}
-						<span class="loading loading-spinner loading-xs"></span>
-						Scanning...
-					{:else}
-						Rescan Library
-					{/if}
-				</button>
-				
-				{#if message}
-					<p class="text-xs tracking-wide {message.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
-						{message}
-					</p>
-				{/if}
 			</section>
 
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">

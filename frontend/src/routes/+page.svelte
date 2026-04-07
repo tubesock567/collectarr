@@ -36,7 +36,9 @@
 </svelte:head>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-	<div class="flex justify-end items-center gap-3 mb-6">
+	<div class="flex justify-between items-center gap-3 mb-6">
+		<h2 class="text-sm font-semibold uppercase tracking-widest text-white">Recently added</h2>
+		<div class="flex items-center gap-3">
 		<button
 			class="p-2 rounded border border-neutral-700 hover:border-neutral-500 transition-colors text-neutral-400 hover:text-white"
 			aria-label={$theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
