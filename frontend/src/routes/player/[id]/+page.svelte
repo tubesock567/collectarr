@@ -131,7 +131,7 @@
 	}
 
 	function handleSeekHover(e) {
-		if (!previewEnabled || !previewData || !duration) return;
+		if (!previewData || !duration) return;
 		const rect = e.currentTarget.getBoundingClientRect();
 		const pos = Math.min(Math.max((e.clientX - rect.left) / rect.width, 0), 1);
 		hoverPercent = pos * 100;
