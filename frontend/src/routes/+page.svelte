@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
-	import { authFetch } from '$lib/auth';
+	import { page } from '$app/stores';
+	import { authFetch, auth, logout } from '$lib/auth';
 	import MetadataTokenInput from '$lib/components/MetadataTokenInput.svelte';
 	import VideoCard from '$lib/components/VideoCard.svelte';
 	import { preferences } from '$lib/preferences';
@@ -32,6 +33,7 @@
 	let savingMetadata = $state(false);
 	let metadataMessage = $state('');
 	let showMobileMenu = $state(false);
+	let metadataPanelOverlayEl = $state(null);
 
 	const normalizedSearchQuery = $derived(searchQuery.trim().toLowerCase());
 	const filteredVideos = $derived.by(() => {
@@ -384,6 +386,9 @@
 	$effect(() => {
 		if (showMetadataPanel) {
 			document.body.style.overflow = 'hidden';
+			queueMicrotask(() => {
+				metadataPanelOverlayEl?.focus();
+			});
 		} else {
 			document.body.style.overflow = '';
 		}
@@ -401,6 +406,15 @@
 
 	onMount(() => {
 		document.addEventListener('click', handleClickOutside);
+		const desktopMediaQuery = window.matchMedia('(min-width: 640px)');
+
+		const handleDesktopMediaChange = (event) => {
+			if (event.matches) {
+				showMobileMenu = false;
+			}
+		};
+
+		desktopMediaQuery.addEventListener('change', handleDesktopMediaChange);
 
 		(async () => {
 			try {
@@ -414,6 +428,7 @@
 
 		return () => {
 			document.removeEventListener('click', handleClickOutside);
+			desktopMediaQuery.removeEventListener('change', handleDesktopMediaChange);
 		};
 	});
 </script>
@@ -425,19 +440,21 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 	<div class="flex flex-col gap-3 mb-6">
 		<div class="flex items-center justify-between">
-			<button
-				class="sm:hidden h-9 w-9 flex items-center justify-center border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
-				aria-label="Toggle menu"
-				onclick={() => showMobileMenu = !showMobileMenu}
-			>
-				<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-					<path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
-				</svg>
-			</button>
-			<div class="hidden sm:flex items-center gap-3">
+			<div class="flex items-center gap-3">
+				<button
+					class="sm:hidden h-9 w-9 flex items-center justify-center border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
+					aria-label="Toggle menu"
+					aria-expanded={showMobileMenu}
+					aria-controls="mobile-library-menu"
+					onclick={() => showMobileMenu = !showMobileMenu}
+				>
+					<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+					</svg>
+				</button>
 				<button
 					class="h-9 w-9 flex items-center justify-center border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
-					aria-label={$theme === 'light' ? 'Switch to dark mode' : 'Switch to dark mode'}
+					aria-label={$theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
 					onclick={() => theme.toggleTheme($theme)}
 				>
 					{#if $theme === 'light'}
@@ -469,41 +486,43 @@
 		</div>
 		
 		{#if showMobileMenu}
-			<div class="sm:hidden flex items-center gap-3 pb-2">
-				<button
-					class="h-9 w-9 flex items-center justify-center border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
-					aria-label={$theme === 'light' ? 'Switch to dark mode' : 'Switch to dark mode'}
-					onclick={() => theme.toggleTheme($theme)}
+			<div id="mobile-library-menu" class="sm:hidden border border-neutral-800 bg-black/70">
+				<a
+					href="/"
+					class="flex items-center justify-between px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-colors {$page.url.pathname === '/' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:bg-neutral-900 hover:text-white'}"
+					onclick={() => showMobileMenu = false}
 				>
-					{#if $theme === 'light'}
-						<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M9 2c-1.05 0-2.05.16-3 .46 1.69 1.23 2.8 3.24 2.8 5.54 0 3.87-3.13 7-7 7-1.11 0-2.16-.26-3.09-.72C.56 16.2 3.5 19 7 19c4.97 0 9-4.03 9-9 0-4.97-4.03-9-9-9z"/>
-						</svg>
-					{:else}
-						<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M6.76 4.84l-1.8-1.79-1.41 1.41 1.79 1.79 1.42-1.41zM4 10.5H1v2h3v-2zm9-9.95h-2V3.5h2V.55zm7.45 3.91l-1.41-1.41-1.79 1.79 1.41 1.41 1.79-1.79zm-3.21 13.7l1.79 1.8 1.41-1.41-1.8-1.79-1.4 1.4zM20 10.5v2h3v-2h-3zm-8-5c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm-1 16.95h2V22h-2v5.05zm-7.45-3.91l1.41 1.41 1.79-1.8-1.41-1.41-1.79 1.8z"/>
-						</svg>
+					<span>Library</span>
+					{#if $page.url.pathname === '/'}
+						<span class="text-[10px] tracking-[0.25em] text-neutral-500">Active</span>
 					{/if}
-				</button>
-				<button
-					class="h-9 w-9 flex items-center justify-center border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
-					aria-label={$preferences.incognito ? 'Disable incognito mode' : 'Enable incognito mode'}
-					onclick={() => preferences.toggleIncognito()}
+				</a>
+				<a
+					href="/settings"
+					class="flex items-center justify-between border-t border-neutral-800 px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-colors {$page.url.pathname === '/settings' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:bg-neutral-900 hover:text-white'}"
+					onclick={() => showMobileMenu = false}
 				>
-					{#if $preferences.incognito}
-						<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M12 4.5C7 4.5 2.73 7.61 1 12c1.73 4.39 6 7.5 11 7.5s9.27-3.11 11-7.5c-1.73-4.39-6-7.5-11-7.5zM12 17c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5zm0-8c-1.66 0-3 1.34-3 3s1.34 3 3 3 3-1.34 3-3-1.34-3-3-3z"/>
-						</svg>
-					{:else}
-						<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M12 7c2.76 0 5 2.24 5 5 0 .65-.13 1.26-.36 1.83l2.92 2.92c1.51-1.26 2.7-2.89 3.43-4.75-1.73-4.39-6-7.5-11-7.5-1.4 0-2.74.25-3.98.7l2.16 2.16C10.74 7.13 11.35 7 12 7zM2 4.27l2.28 2.28.46.46C3.08 8.3 1.78 10.02 1 12c1.73 4.39 6 7.5 11 7.5 1.55 0 3.03-.3 4.38-.84l.42.42L19.73 22 21 20.73 3.27 3 2 4.27zM7.53 9.8l1.55 1.55c-.05.21-.08.43-.08.65 0 1.66 1.34 3 3 3 .22 0 .44-.03.65-.08l1.55 1.55c-.67.33-1.41.53-2.2.53-2.76 0-5-2.24-5-5 0-.79.2-1.53.53-2.2zm4.31-.78l3.15 3.15.02-.16c0-1.66-1.34-3-3-3l-.17.01z"/>
-						</svg>
+					<span>Settings</span>
+					{#if $page.url.pathname === '/settings'}
+						<span class="text-[10px] tracking-[0.25em] text-neutral-500">Active</span>
 					{/if}
-				</button>
+				</a>
+				{#if $auth.isAuthenticated}
+					<button
+						class="flex w-full items-center justify-between border-t border-neutral-800 px-3 py-3 text-xs font-semibold uppercase tracking-widest text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-white"
+						onclick={() => {
+							showMobileMenu = false;
+							logout();
+						}}
+					>
+						<span>Logout</span>
+						<span class="text-[10px] tracking-[0.25em] text-neutral-500">{$auth.username}</span>
+					</button>
+				{/if}
 			</div>
 		{/if}
 		
-		<label class="flex items-center h-9 border border-neutral-600 bg-neutral-900 text-white overflow-hidden focus-within:border-neutral-400 transition-colors w-full">
+		<label class="flex h-9 w-full items-center self-stretch overflow-hidden border border-neutral-600 bg-neutral-900 text-white transition-colors focus-within:border-neutral-400 sm:w-[28rem] sm:self-auto lg:w-[34rem]">
 			<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-400 border-r border-neutral-600 h-full flex items-center shrink-0">Search</span>
 			<input
 				type="search"
@@ -689,7 +708,23 @@
 </div>
 
 {#if selectionMode && selectedCount > 0 && showMetadataPanel}
-	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm" onclick={(e) => { if (e.target === e.currentTarget) showMetadataPanel = false; }}>
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+		bind:this={metadataPanelOverlayEl}
+		role="button"
+		tabindex="0"
+		aria-label="Close metadata editor"
+		onclick={(e) => {
+			if (e.target === e.currentTarget) showMetadataPanel = false;
+		}}
+		onkeydown={(e) => {
+			if (e.target !== e.currentTarget) return;
+			if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+				e.preventDefault();
+				showMetadataPanel = false;
+			}
+		}}
+	>
 		<div class="w-full max-w-2xl max-h-[90vh] overflow-hidden border border-neutral-800 bg-black shadow-2xl">
 			<div class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5">
 				<div>
