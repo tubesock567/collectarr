@@ -69,6 +69,7 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/logs", api.authMiddleware(http.HandlerFunc(api.handleGetLogs))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/videos", api.authMiddleware(http.HandlerFunc(api.handleListVideos))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/videos/{id:[0-9]+}", api.authMiddleware(http.HandlerFunc(api.handleGetVideo))).Methods(http.MethodGet, http.MethodOptions)
+	authRouter.Handle("/videos/{id:[0-9]+}/metadata", api.authMiddleware(http.HandlerFunc(api.handleUpdateVideoMetadata))).Methods(http.MethodPut, http.MethodOptions)
 	authRouter.Handle("/scan", api.authMiddleware(http.HandlerFunc(api.handleScan))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/directory", api.authMiddleware(http.HandlerFunc(api.handleDirectoryListing))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/settings/media-path", api.authMiddleware(http.HandlerFunc(api.handleGetMediaPath))).Methods(http.MethodGet, http.MethodOptions)
@@ -247,6 +248,43 @@ func (api *API) handleGetVideo(w http.ResponseWriter, r *http.Request) {
 		}
 		api.logger.Error("get video group failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load video"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, group)
+}
+
+func (api *API) handleUpdateVideoMetadata(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(mux.Vars(r)["id"])
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid video id"})
+		return
+	}
+
+	var req VideoMetadataUpdateRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid video metadata payload"})
+		return
+	}
+
+	if err := api.store.UpdateVideoGroupMetadata(id, req.Tags, req.Actors); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "video not found"})
+			return
+		}
+		api.logger.Error("update video group metadata failed", "video_id", id, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to save video metadata"})
+		return
+	}
+
+	group, err := api.store.GetVideoGroupByID(id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "video not found"})
+			return
+		}
+		api.logger.Error("reload video group after metadata update failed", "video_id", id, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load updated video metadata"})
 		return
 	}
 

@@ -2,6 +2,7 @@ package main
 
 import (
 	"database/sql"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
@@ -21,6 +22,8 @@ CREATE TABLE IF NOT EXISTS videos (
 	path TEXT NOT NULL,
 	quality TEXT,
 	duration INTEGER,
+	tags_json TEXT NOT NULL DEFAULT '[]',
+	actors_json TEXT NOT NULL DEFAULT '[]',
 	date_added DATETIME DEFAULT CURRENT_TIMESTAMP,
 	date_scanned DATETIME
 );`
@@ -127,6 +130,32 @@ func (s *Store) Init() error {
 		}
 		if s.logger != nil {
 			s.logger.Info("migrated videos table schema", "added_column", "quality")
+		}
+	}
+
+	hasTags, err := s.hasVideosColumn("tags_json")
+	if err != nil {
+		return err
+	}
+	if !hasTags {
+		if _, err := s.db.Exec(`ALTER TABLE videos ADD COLUMN tags_json TEXT NOT NULL DEFAULT '[]'`); err != nil {
+			return fmt.Errorf("add tags_json column: %w", err)
+		}
+		if s.logger != nil {
+			s.logger.Info("migrated videos table schema", "added_column", "tags_json")
+		}
+	}
+
+	hasActors, err := s.hasVideosColumn("actors_json")
+	if err != nil {
+		return err
+	}
+	if !hasActors {
+		if _, err := s.db.Exec(`ALTER TABLE videos ADD COLUMN actors_json TEXT NOT NULL DEFAULT '[]'`); err != nil {
+			return fmt.Errorf("add actors_json column: %w", err)
+		}
+		if s.logger != nil {
+			s.logger.Info("migrated videos table schema", "added_column", "actors_json")
 		}
 	}
 
@@ -298,7 +327,7 @@ func (s *Store) Close() error {
 
 func (s *Store) ListVideos() ([]Video, error) {
 	rows, err := s.db.Query(`
-		SELECT id, title, filename, path, quality, duration, date_added, date_scanned
+		SELECT id, title, filename, path, quality, duration, tags_json, actors_json, date_added, date_scanned
 		FROM videos
 		ORDER BY date_added DESC, id DESC`)
 	if err != nil {
@@ -324,7 +353,7 @@ func (s *Store) ListVideos() ([]Video, error) {
 
 func (s *Store) GetVideoByID(id int64) (Video, error) {
 	row := s.db.QueryRow(`
-		SELECT id, title, filename, path, quality, duration, date_added, date_scanned
+		SELECT id, title, filename, path, quality, duration, tags_json, actors_json, date_added, date_scanned
 		FROM videos
 		WHERE id = ?`, id)
 
@@ -341,7 +370,7 @@ func (s *Store) GetVideoByID(id int64) (Video, error) {
 
 func (s *Store) GetVideoByPath(path string) (Video, error) {
 	row := s.db.QueryRow(`
-		SELECT id, title, filename, path, quality, duration, date_added, date_scanned
+		SELECT id, title, filename, path, quality, duration, tags_json, actors_json, date_added, date_scanned
 		FROM videos
 		WHERE path = ?`, path)
 
@@ -357,10 +386,19 @@ func (s *Store) GetVideoByPath(path string) (Video, error) {
 }
 
 func (s *Store) InsertVideo(video ScannedVideo) error {
+	metadataTagsJSON := "[]"
+	metadataActorsJSON := "[]"
+	if existingTagsJSON, existingActorsJSON, err := s.getMetadataByTitle(video.Title); err == nil {
+		metadataTagsJSON = existingTagsJSON
+		metadataActorsJSON = existingActorsJSON
+	} else if !errors.Is(err, sql.ErrNoRows) {
+		return fmt.Errorf("load existing group metadata: %w", err)
+	}
+
 	_, err := s.db.Exec(`
-		INSERT INTO videos (title, filename, path, quality, duration, date_scanned)
-		VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
-		video.Title, video.Filename, video.Path, video.Quality, video.Duration,
+		INSERT INTO videos (title, filename, path, quality, duration, tags_json, actors_json, date_scanned)
+		VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`,
+		video.Title, video.Filename, video.Path, video.Quality, video.Duration, metadataTagsJSON, metadataActorsJSON,
 	)
 	if err != nil {
 		return fmt.Errorf("insert video: %w", err)
@@ -387,6 +425,39 @@ func (s *Store) UpdateVideoMetadata(id int64, video ScannedVideo) error {
 	return nil
 }
 
+func (s *Store) UpdateVideoGroupMetadata(id int64, tags []string, actors []string) error {
+	var title string
+	if err := s.db.QueryRow(`SELECT title FROM videos WHERE id = ?`, id).Scan(&title); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return err
+		}
+		return fmt.Errorf("load video title for metadata update: %w", err)
+	}
+
+	tagsJSON, err := marshalStringList(tags)
+	if err != nil {
+		return fmt.Errorf("encode tags: %w", err)
+	}
+	actorsJSON, err := marshalStringList(actors)
+	if err != nil {
+		return fmt.Errorf("encode actors: %w", err)
+	}
+
+	_, err = s.db.Exec(`
+		UPDATE videos
+		SET tags_json = ?, actors_json = ?
+		WHERE title = ?`, tagsJSON, actorsJSON, title)
+	if err != nil {
+		return fmt.Errorf("update video group metadata: %w", err)
+	}
+
+	if s.logger != nil {
+		s.logger.Info("video group metadata updated", "video_id", id, "title", title, "tags_count", len(tags), "actors_count", len(actors))
+	}
+
+	return nil
+}
+
 func (s *Store) IsUniqueFilenameError(err error) bool {
 	if err == nil {
 		return false
@@ -399,14 +470,18 @@ func scanVideoSummary(scanner interface{ Scan(dest ...any) error }) (Video, erro
 	var dateAdded sql.NullTime
 	var dateScanned sql.NullTime
 	var quality sql.NullString
+	var tagsJSON string
+	var actorsJSON string
 
-	if err := scanner.Scan(&video.ID, &video.Title, &video.Filename, &video.Path, &quality, &video.Duration, &dateAdded, &dateScanned); err != nil {
+	if err := scanner.Scan(&video.ID, &video.Title, &video.Filename, &video.Path, &quality, &video.Duration, &tagsJSON, &actorsJSON, &dateAdded, &dateScanned); err != nil {
 		return Video{}, err
 	}
 
 	if quality.Valid {
 		video.Quality = quality.String
 	}
+	video.Tags = parseStringList(tagsJSON)
+	video.Actors = parseStringList(actorsJSON)
 
 	assignVideoTimes(&video, dateAdded, dateScanned)
 	return video, nil
@@ -417,14 +492,18 @@ func scanVideoDetail(scanner interface{ Scan(dest ...any) error }) (Video, error
 	var dateAdded sql.NullTime
 	var dateScanned sql.NullTime
 	var quality sql.NullString
+	var tagsJSON string
+	var actorsJSON string
 
-	if err := scanner.Scan(&video.ID, &video.Title, &video.Filename, &video.Path, &quality, &video.Duration, &dateAdded, &dateScanned); err != nil {
+	if err := scanner.Scan(&video.ID, &video.Title, &video.Filename, &video.Path, &quality, &video.Duration, &tagsJSON, &actorsJSON, &dateAdded, &dateScanned); err != nil {
 		return Video{}, err
 	}
 
 	if quality.Valid {
 		video.Quality = quality.String
 	}
+	video.Tags = parseStringList(tagsJSON)
+	video.Actors = parseStringList(actorsJSON)
 
 	assignVideoTimes(&video, dateAdded, dateScanned)
 	return video, nil
@@ -443,7 +522,7 @@ func assignVideoTimes(video *Video, dateAdded, dateScanned sql.NullTime) {
 
 func (s *Store) ListVideoGroups() ([]VideoGroup, error) {
 	rows, err := s.db.Query(`
-		SELECT id, title, filename, quality, duration, date_added, date_scanned
+		SELECT id, title, filename, quality, duration, tags_json, actors_json, date_added, date_scanned
 		FROM videos
 		ORDER BY title,
 			CASE quality
@@ -468,8 +547,10 @@ func (s *Store) ListVideoGroups() ([]VideoGroup, error) {
 		var dateAdded sql.NullTime
 		var dateScanned sql.NullTime
 		var quality sql.NullString
+		var tagsJSON string
+		var actorsJSON string
 
-		if err := rows.Scan(&video.ID, &video.Title, &video.Filename, &quality, &video.Duration, &dateAdded, &dateScanned); err != nil {
+		if err := rows.Scan(&video.ID, &video.Title, &video.Filename, &quality, &video.Duration, &tagsJSON, &actorsJSON, &dateAdded, &dateScanned); err != nil {
 			return nil, fmt.Errorf("scan video: %w", err)
 		}
 
@@ -477,6 +558,8 @@ func (s *Store) ListVideoGroups() ([]VideoGroup, error) {
 		if quality.Valid {
 			video.Quality = quality.String
 		}
+		video.Tags = parseStringList(tagsJSON)
+		video.Actors = parseStringList(actorsJSON)
 
 		if current == nil || current.Title != video.Title {
 			groups = append(groups, VideoGroup{
@@ -485,9 +568,13 @@ func (s *Store) ListVideoGroups() ([]VideoGroup, error) {
 				Duration:    video.Duration,
 				DateAdded:   video.DateAdded,
 				DateScanned: video.DateScanned,
+				Tags:        append([]string(nil), video.Tags...),
+				Actors:      append([]string(nil), video.Actors...),
 				Variants:    []VideoVariant{},
 			})
 			current = &groups[len(groups)-1]
+		} else {
+			mergeGroupMetadata(current, video)
 		}
 
 		qualityStr := video.Quality
@@ -519,7 +606,7 @@ func (s *Store) GetVideoGroupByID(id int64) (VideoGroup, error) {
 	}
 
 	rows, err := s.db.Query(`
-		SELECT id, title, filename, quality, duration, date_added, date_scanned
+		SELECT id, title, filename, quality, duration, tags_json, actors_json, date_added, date_scanned
 		FROM videos
 		WHERE title = ?
 		ORDER BY
@@ -544,8 +631,10 @@ func (s *Store) GetVideoGroupByID(id int64) (VideoGroup, error) {
 		var dateAdded sql.NullTime
 		var dateScanned sql.NullTime
 		var quality sql.NullString
+		var tagsJSON string
+		var actorsJSON string
 
-		if err := rows.Scan(&video.ID, &video.Title, &video.Filename, &quality, &video.Duration, &dateAdded, &dateScanned); err != nil {
+		if err := rows.Scan(&video.ID, &video.Title, &video.Filename, &quality, &video.Duration, &tagsJSON, &actorsJSON, &dateAdded, &dateScanned); err != nil {
 			return VideoGroup{}, fmt.Errorf("scan video group row: %w", err)
 		}
 
@@ -553,6 +642,8 @@ func (s *Store) GetVideoGroupByID(id int64) (VideoGroup, error) {
 		if quality.Valid {
 			video.Quality = quality.String
 		}
+		video.Tags = parseStringList(tagsJSON)
+		video.Actors = parseStringList(actorsJSON)
 
 		if !initialized {
 			group = VideoGroup{
@@ -561,9 +652,13 @@ func (s *Store) GetVideoGroupByID(id int64) (VideoGroup, error) {
 				Duration:    video.Duration,
 				DateAdded:   video.DateAdded,
 				DateScanned: video.DateScanned,
+				Tags:        append([]string(nil), video.Tags...),
+				Actors:      append([]string(nil), video.Actors...),
 				Variants:    []VideoVariant{},
 			}
 			initialized = true
+		} else {
+			mergeGroupMetadata(&group, video)
 		}
 
 		qualityStr := video.Quality
@@ -586,4 +681,66 @@ func (s *Store) GetVideoGroupByID(id int64) (VideoGroup, error) {
 	}
 
 	return group, nil
+}
+
+func parseStringList(raw string) []string {
+	if strings.TrimSpace(raw) == "" {
+		return []string{}
+	}
+
+	var values []string
+	if err := json.Unmarshal([]byte(raw), &values); err != nil {
+		return []string{}
+	}
+
+	return sanitizeStringList(values)
+}
+
+func marshalStringList(values []string) (string, error) {
+	data, err := json.Marshal(sanitizeStringList(values))
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func sanitizeStringList(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	cleaned := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		if _, exists := seen[trimmed]; exists {
+			continue
+		}
+		seen[trimmed] = struct{}{}
+		cleaned = append(cleaned, trimmed)
+	}
+	return cleaned
+}
+
+func (s *Store) getMetadataByTitle(title string) (string, string, error) {
+	var tagsJSON string
+	var actorsJSON string
+	err := s.db.QueryRow(`
+		SELECT tags_json, actors_json
+		FROM videos
+		WHERE title = ? AND (tags_json != '[]' OR actors_json != '[]')
+		ORDER BY id DESC
+		LIMIT 1`, title).Scan(&tagsJSON, &actorsJSON)
+	if err != nil {
+		return "", "", err
+	}
+	return tagsJSON, actorsJSON, nil
+}
+
+func mergeGroupMetadata(group *VideoGroup, video Video) {
+	if len(group.Tags) == 0 && len(video.Tags) > 0 {
+		group.Tags = append([]string(nil), video.Tags...)
+	}
+	if len(group.Actors) == 0 && len(video.Actors) > 0 {
+		group.Actors = append([]string(nil), video.Actors...)
+	}
 }

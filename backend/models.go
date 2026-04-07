@@ -11,6 +11,8 @@ type Video struct {
 	Duration    int        `json:"duration"`
 	DateAdded   *time.Time `json:"date_added,omitempty"`
 	DateScanned *time.Time `json:"date_scanned,omitempty"`
+	Tags        []string   `json:"tags,omitempty"`
+	Actors      []string   `json:"actors,omitempty"`
 }
 
 type VideoVariant struct {
@@ -25,6 +27,8 @@ type VideoGroup struct {
 	Duration    int            `json:"duration"`
 	DateAdded   *time.Time     `json:"date_added,omitempty"`
 	DateScanned *time.Time     `json:"date_scanned,omitempty"`
+	Tags        []string       `json:"tags,omitempty"`
+	Actors      []string       `json:"actors,omitempty"`
 	Variants    []VideoVariant `json:"variants"`
 }
 
@@ -107,6 +111,11 @@ type PreviewGenerationRequest struct {
 	GenerateThumbnails      bool `json:"generate_thumbnails"`
 	GenerateScrubberSprites bool `json:"generate_scrubber_sprites"`
 	GenerateHoverPreviews   bool `json:"generate_hover_previews"`
+}
+
+type VideoMetadataUpdateRequest struct {
+	Tags   []string `json:"tags"`
+	Actors []string `json:"actors"`
 }
 
 type PreviewGenerationStatus struct {
