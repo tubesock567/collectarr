@@ -138,12 +138,12 @@
 		<div class="flex items-center gap-3 flex-wrap">
 			<div class="relative" bind:this={sortDropdownEl}>
 				<button
-					class="flex items-center gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 rounded hover:border-neutral-400 transition-colors text-white bg-neutral-900"
+					class="flex items-center gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 rounded-none hover:border-neutral-400 transition-colors text-white bg-neutral-900"
 					onclick={() => showSortDropdown = !showSortDropdown}
 					aria-label="Sort options"
 				>
 					<span>Sort: {getSortLabel()}</span>
-					<span class="p-0.5 hover:bg-neutral-700 rounded"
+					<span class="p-0.5 hover:bg-neutral-700 rounded-none"
 						onclick={(e) => { e.stopPropagation(); toggleSortOrder(); }}
 						role="button"
 						tabindex="0"
@@ -164,21 +164,21 @@
 					</svg>
 				</button>
 				{#if showSortDropdown}
-					<div class="absolute top-full left-0 mt-1 w-40 bg-neutral-900 border border-neutral-600 rounded shadow-xl z-20">
+					<div class="absolute top-full left-0 mt-1 w-40 bg-black border border-neutral-600 rounded-none shadow-xl z-20">
 						<button
-							class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-800 transition-colors {sortBy === 'dateAdded' ? 'text-white bg-neutral-800' : 'text-neutral-300'}"
+							class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'dateAdded' ? 'text-white bg-neutral-900' : 'text-neutral-300'}"
 							onclick={() => setSort('dateAdded')}
 						>
 							Date added
 						</button>
 						<button
-							class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-800 transition-colors {sortBy === 'duration' ? 'text-white bg-neutral-800' : 'text-neutral-300'}"
+							class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'duration' ? 'text-white bg-neutral-900' : 'text-neutral-300'}"
 							onclick={() => setSort('duration')}
 						>
 							Duration
 						</button>
 						<button
-							class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-800 transition-colors {sortBy === 'alphabetical' ? 'text-white bg-neutral-800' : 'text-neutral-300'}"
+							class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'alphabetical' ? 'text-white bg-neutral-900' : 'text-neutral-300'}"
 							onclick={() => setSort('alphabetical')}
 						>
 							Alphabetical
@@ -189,7 +189,7 @@
 
 			<div class="relative" bind:this={columnDropdownEl}>
 				<button
-					class="flex items-center gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 rounded hover:border-neutral-400 transition-colors text-white bg-neutral-900"
+					class="flex items-center gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 rounded-none hover:border-neutral-400 transition-colors text-white bg-neutral-900"
 					onclick={() => showColumnDropdown = !showColumnDropdown}
 					aria-label="Column count options"
 				>
@@ -199,10 +199,10 @@
 					</svg>
 				</button>
 				{#if showColumnDropdown}
-					<div class="absolute top-full left-0 mt-1 w-32 bg-neutral-900 border border-neutral-600 rounded shadow-xl z-20">
+					<div class="absolute top-full left-0 mt-1 w-32 bg-black border border-neutral-600 rounded-none shadow-xl z-20">
 						{#each [2, 3, 4] as count}
 							<button
-								class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-800 transition-colors {columnCount === count ? 'text-white bg-neutral-800' : 'text-neutral-300'}"
+								class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {columnCount === count ? 'text-white bg-neutral-900' : 'text-neutral-300'}"
 								onclick={() => setColumnCount(count)}
 							>
 								{count} columns
@@ -213,7 +213,7 @@
 			</div>
 
 			<button
-				class="h-9 w-9 flex items-center justify-center rounded border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
+				class="h-9 w-9 flex items-center justify-center rounded-none border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
 				aria-label={$theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
 				onclick={() => theme.toggleTheme($theme)}
 			>
@@ -228,7 +228,7 @@
 				{/if}
 			</button>
 			<button
-				class="h-9 w-9 flex items-center justify-center rounded border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
+				class="h-9 w-9 flex items-center justify-center rounded-none border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
 				aria-label={$preferences.incognito ? 'Disable incognito mode' : 'Enable incognito mode'}
 				onclick={() => preferences.toggleIncognito()}
 			>
