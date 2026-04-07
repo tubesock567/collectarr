@@ -62,9 +62,18 @@
 
 :root.theme-light [class~='bg-black/80'],
 :root.theme-light [class~='bg-black/90'],
-:root.theme-light [class~='bg-black/50'] {
+:root.theme-light [class~='bg-black/50'],
+:root.theme-light [class~='bg-black/70'] {
 	background-color: rgba(255, 255, 255, 0.88) !important;
 	color: #111827 !important;
+}
+
+:root.theme-light [class~='bg-neutral-950/60'] {
+	background-color: rgba(229, 231, 235, 0.6) !important;
+}
+
+:root.theme-light [class~='text-white/80'] {
+	color: rgba(17, 24, 39, 0.8) !important;
 }
 
 :root.theme-light [class~='from-black/90'] {

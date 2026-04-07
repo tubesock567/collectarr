@@ -395,6 +395,17 @@
 		}
 	}
 
+	$effect(() => {
+		if (showMetadataPanel) {
+			document.body.style.overflow = 'hidden';
+		} else {
+			document.body.style.overflow = '';
+		}
+		return () => {
+			document.body.style.overflow = '';
+		};
+	});
+
 	onMount(() => {
 		document.addEventListener('click', handleClickOutside);
 
@@ -559,7 +570,7 @@
 						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white rounded-none hover:border-neutral-400 transition-colors" onclick={() => showMetadataPanel = true}>
 							Edit selection
 						</button>
-						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-700 text-neutral-300 rounded-none hover:border-neutral-400 hover:text-white transition-colors" onclick={clearSelection}>
+						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 text-white rounded-none hover:border-neutral-400 hover:bg-neutral-800 transition-colors" onclick={clearSelection}>
 							Clear
 						</button>
 					{/if}
