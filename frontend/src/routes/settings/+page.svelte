@@ -29,6 +29,11 @@
 	let clearingDatabase = $state(false);
 	let clearDatabaseMessage = $state('');
 	let showMediaBrowser = $state(false);
+	let logs = $state([]);
+	let logsLoading = $state(false);
+	let logsMessage = $state('');
+	let logsRequestInFlight = $state(false);
+	let latestLogsRequest = 0;
 
 	async function readError(res, fallback) {
 		try {
@@ -59,6 +64,19 @@
 		} catch (err) {
 			mediaPathMessage = `Error: ${err.message}`;
 		}
+	});
+
+	$effect(() => {
+		if (activeTab !== 'logs') {
+			return;
+		}
+
+		fetchLogs(true);
+		const interval = setInterval(() => {
+			fetchLogs(false);
+		}, 5000);
+
+		return () => clearInterval(interval);
 	});
 	
 	async function scanLibrary() {
@@ -220,9 +238,45 @@
 		}
 	}
 
+	async function fetchLogs(showSpinner = true) {
+		if (logsRequestInFlight) return;
+		logsRequestInFlight = true;
+		const requestId = ++latestLogsRequest;
+		if (showSpinner) {
+			logsLoading = true;
+		}
+		logsMessage = '';
+
+		try {
+			const res = await authFetch('/api/logs?limit=200');
+			if (!res.ok) throw new Error(await readError(res, 'Failed to load logs'));
+			const data = await res.json();
+			if (requestId === latestLogsRequest) {
+				logs = Array.isArray(data?.entries) ? data.entries : [];
+			}
+		} catch (err) {
+			if (requestId === latestLogsRequest) {
+				logsMessage = `Error: ${err.message}`;
+			}
+		} finally {
+			if (requestId === latestLogsRequest) {
+				logsLoading = false;
+			}
+			logsRequestInFlight = false;
+		}
+	}
+
+	function formatLogTimestamp(timestamp) {
+		if (!timestamp) return '';
+		const value = new Date(timestamp);
+		if (Number.isNaN(value.getTime())) return timestamp;
+		return value.toLocaleString();
+	}
+
 	const tabs = [
 		{ id: 'account', label: 'Account' },
 		{ id: 'library', label: 'Library' },
+		{ id: 'logs', label: 'Logs' },
 		{ id: 'system', label: 'System' }
 	];
 </script>
@@ -482,6 +536,70 @@
 				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">System Info</h2>
 					<p class="text-xs text-neutral-500">Collectarr Media Server v1.0.0</p>
+				</div>
+			</section>
+		</div>
+	{/if}
+
+	{#if activeTab === 'logs'}
+		<div class="space-y-8">
+			<section class="border border-neutral-800 p-6 flex flex-col gap-4">
+				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+					<div>
+						<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Application Logs</h2>
+						<p class="text-xs text-neutral-500">Live backend activity, API requests, scans, database changes, and preview jobs.</p>
+					</div>
+
+					<button
+						onclick={() => fetchLogs(true)}
+						disabled={logsLoading}
+						class="bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
+					>
+						{#if logsLoading}
+							<span class="loading loading-spinner loading-xs"></span>
+							Refreshing...
+						{:else}
+							Refresh Logs
+						{/if}
+					</button>
+				</div>
+
+				{#if logsMessage}
+					<p class="text-xs tracking-wide text-red-500">{logsMessage}</p>
+				{/if}
+
+				<div class="border border-neutral-800 bg-black min-h-[28rem] max-h-[40rem] overflow-y-auto">
+					{#if logsLoading && logs.length === 0}
+						<div class="flex min-h-[28rem] items-center justify-center">
+							<span class="loading loading-spinner loading-lg text-white"></span>
+						</div>
+					{:else if logs.length === 0}
+						<div class="flex min-h-[28rem] items-center justify-center px-6 text-center text-xs uppercase tracking-widest text-neutral-500">
+							No logs captured yet.
+						</div>
+					{:else}
+						<div class="divide-y divide-neutral-900 font-mono text-xs">
+							{#each logs as entry}
+								<div class="px-4 py-3 space-y-2">
+									<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
+										<div class="flex flex-wrap items-center gap-2">
+											<span class="text-neutral-500">{formatLogTimestamp(entry.timestamp)}</span>
+											<span class="border px-2 py-0.5 uppercase tracking-widest {entry.level === 'ERROR' ? 'border-red-800 text-red-400' : entry.level === 'WARN' ? 'border-amber-800 text-amber-400' : 'border-neutral-700 text-neutral-300'}">{entry.level}</span>
+										</div>
+										<p class="text-neutral-100 break-all">{entry.message}</p>
+									</div>
+
+									{#if entry.fields?.length}
+										<div class="flex flex-wrap gap-2 text-[11px] text-neutral-400">
+											{#each entry.fields as field}
+												<span class="border border-neutral-800 bg-neutral-950 px-2 py-1 break-all">{field.key}={field.value}</span>
+											{/each}
+										</div>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
 				</div>
 			</section>
 		</div>
