@@ -555,12 +555,6 @@
 				</div>
 
 				<div class="flex flex-wrap items-center gap-2">
-					<button class="h-9 px-3 text-xs uppercase tracking-wider border rounded-none transition-colors {allPageSelected ? 'border-white bg-white text-black' : 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}" onclick={toggleCurrentPageSelection}>
-						{allPageSelected ? 'Deselect page' : 'Select page'}
-					</button>
-					<button class="h-9 px-3 text-xs uppercase tracking-wider border rounded-none transition-colors {allFilteredSelected ? 'border-white bg-white text-black' : 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}" onclick={toggleFilteredSelection}>
-						{allFilteredSelected ? 'Deselect filtered' : 'Select filtered'}
-					</button>
 					{#if selectedCount > 0}
 						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white rounded-none hover:border-neutral-400 transition-colors" onclick={() => showMetadataPanel = true}>
 							Edit selection

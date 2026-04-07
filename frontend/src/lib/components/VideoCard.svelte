@@ -66,7 +66,7 @@
 		onfocus={startHover}
 		onblur={stopHover}
 	>
-	<div class="w-full aspect-video bg-neutral-900 border overflow-hidden relative transition-colors duration-300 {selected ? 'border-white' : 'border-neutral-800 group-hover:border-neutral-500'}">
+	<div class="w-full aspect-video bg-neutral-900 border overflow-hidden relative transition-all duration-300 {selected ? 'border-white ring-2 ring-white ring-offset-2 ring-offset-black' : 'border-neutral-800 group-hover:border-neutral-500'}">
 		<img
 			src={`/api/video/${video.id}/thumbnail`}
 			alt={video.title}
@@ -89,19 +89,22 @@
 		{/if}
 
 		{#if firstVariant}
-			<div class="absolute top-2 left-2 flex items-center gap-1">
-				<span class="bg-black/80 px-2 py-1 text-[10px] font-mono tracking-wider text-white leading-none flex items-center h-5">
-					{firstVariant.quality}
-				</span>
+			<div class="absolute top-2 left-2">
 				{#if hasMultiple}
-					<div class="relative hover:block group/plus">
-						<span class="bg-black/80 px-1.5 py-1 text-[10px] font-mono tracking-wider text-white cursor-help leading-none flex items-center justify-center h-5 w-5">+</span>
-						<div class="absolute top-full left-0 mt-1 hidden group-hover/plus:block z-10">
+					<div class="relative group/resolutions">
+						<span class="bg-black/80 px-2 py-1 text-[10px] font-mono tracking-wider text-white leading-none flex items-center h-5 cursor-help">
+							{firstVariant.quality}
+						</span>
+						<div class="absolute top-full left-0 mt-1 hidden group-hover/resolutions:block z-10">
 							<div class="bg-black/90 border border-neutral-700 px-2 py-1.5 text-[10px] font-mono text-white whitespace-nowrap">
 								{displayVariants.map((variant) => variant.quality).join(', ')}
 							</div>
 						</div>
 					</div>
+				{:else}
+					<span class="bg-black/80 px-2 py-1 text-[10px] font-mono tracking-wider text-white leading-none flex items-center h-5">
+						{firstVariant.quality}
+					</span>
 				{/if}
 			</div>
 		{/if}

@@ -360,9 +360,10 @@
 >
 	<a 
 		href="/" 
-		class="absolute top-6 left-6 z-50 text-white/50 hover:text-white uppercase tracking-widest text-xs font-bold px-4 py-2 border border-white/20 hover:border-white/50 transition-all bg-black/50 backdrop-blur {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
+		class="absolute top-6 left-6 z-50 flex items-center gap-4 text-white/50 hover:text-white uppercase tracking-widest text-xs font-bold px-4 py-2 border border-white/20 hover:border-white/50 transition-all bg-black/50 backdrop-blur {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
 	>
-		&larr; Back
+		<span>&larr; Back</span>
+		<span class="text-white/70 max-w-xs truncate">{video?.title || 'Unknown title'}</span>
 	</a>
 
 	<button
@@ -519,10 +520,6 @@
 			</button>
 		</div>
 	{/if}
-
-	<div class="absolute top-20 left-6 z-30 transition-opacity duration-300 {showControls ? 'opacity-100' : 'opacity-0'}">
-		<h1 class="text-white text-xl font-semibold drop-shadow-lg max-w-md truncate">{video?.title || 'Unknown title'}</h1>
-	</div>
 
 	<div 
 		class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-12 transition-opacity duration-300 {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}"
