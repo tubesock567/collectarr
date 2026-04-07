@@ -14,7 +14,9 @@
     let currentPage = $state(1);
     let itemsPerPage = $state(24);
     let showSortDropdown = $state(false);
+    let showColumnDropdown = $state(false);
     let sortDropdownEl = $state(null);
+    let columnDropdownEl = $state(null);
 
     const totalPages = $derived(() => Math.ceil(videos.length / itemsPerPage));
 
@@ -62,6 +64,7 @@
 
     function setColumnCount(count) {
         columnCount = count;
+        showColumnDropdown = false;
     }
 
     function goToPage(page) {
@@ -75,9 +78,7 @@
         const classes = {
             2: 'grid-cols-1 sm:grid-cols-2',
             3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-            4: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
-            5: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5',
-            6: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 3xl:grid-cols-6'
+            4: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
         };
         return classes[count] || classes[4];
     }
@@ -94,6 +95,9 @@
     function handleClickOutside(event) {
         if (sortDropdownEl && !sortDropdownEl.contains(event.target)) {
             showSortDropdown = false;
+        }
+        if (columnDropdownEl && !columnDropdownEl.contains(event.target)) {
+            showColumnDropdown = false;
         }
     }
 
@@ -128,13 +132,13 @@
 	<title>Collectarr - Library</title>
 </svelte:head>
 
-<div class="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 	<div class="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
 		<h2 class="text-sm font-semibold uppercase tracking-widest text-white">Library</h2>
 		<div class="flex items-center gap-3 flex-wrap">
 			<div class="relative" bind:this={sortDropdownEl}>
 				<button
-					class="flex items-center gap-2 px-3 py-1.5 text-xs uppercase tracking-wider border border-neutral-700 rounded hover:border-neutral-500 transition-colors text-white bg-neutral-800"
+					class="flex items-center gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 rounded hover:border-neutral-400 transition-colors text-white bg-neutral-900"
 					onclick={() => showSortDropdown = !showSortDropdown}
 					aria-label="Sort options"
 				>
@@ -160,21 +164,21 @@
 					</svg>
 				</button>
 				{#if showSortDropdown}
-					<div class="absolute top-full left-0 mt-1 w-40 bg-neutral-800 border border-neutral-700 rounded shadow-lg z-20">
+					<div class="absolute top-full left-0 mt-1 w-40 bg-neutral-900 border border-neutral-600 rounded shadow-xl z-20">
 						<button
-							class="w-full px-3 py-2 text-xs text-left hover:bg-neutral-700 transition-colors {sortBy === 'dateAdded' ? 'text-white bg-neutral-700' : 'text-neutral-400'}"
+							class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-800 transition-colors {sortBy === 'dateAdded' ? 'text-white bg-neutral-800' : 'text-neutral-300'}"
 							onclick={() => setSort('dateAdded')}
 						>
 							Date added
 						</button>
 						<button
-							class="w-full px-3 py-2 text-xs text-left hover:bg-neutral-700 transition-colors {sortBy === 'duration' ? 'text-white bg-neutral-700' : 'text-neutral-400'}"
+							class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-800 transition-colors {sortBy === 'duration' ? 'text-white bg-neutral-800' : 'text-neutral-300'}"
 							onclick={() => setSort('duration')}
 						>
 							Duration
 						</button>
 						<button
-							class="w-full px-3 py-2 text-xs text-left hover:bg-neutral-700 transition-colors {sortBy === 'alphabetical' ? 'text-white bg-neutral-700' : 'text-neutral-400'}"
+							class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-800 transition-colors {sortBy === 'alphabetical' ? 'text-white bg-neutral-800' : 'text-neutral-300'}"
 							onclick={() => setSort('alphabetical')}
 						>
 							Alphabetical
@@ -183,21 +187,33 @@
 				{/if}
 			</div>
 
-			<div class="flex items-center gap-1 border border-neutral-700 rounded p-1">
-				{#each [2, 3, 4, 5, 6] as count}
-					<button
-						class="px-2 py-1 text-xs font-mono transition-colors {columnCount === count ? 'text-white bg-neutral-700' : 'text-neutral-400 hover:text-white'}"
-						onclick={() => setColumnCount(count)}
-						aria-label="{count} columns"
-						title="{count} columns"
-					>
-						{count}
-					</button>
-				{/each}
+			<div class="relative" bind:this={columnDropdownEl}>
+				<button
+					class="flex items-center gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 rounded hover:border-neutral-400 transition-colors text-white bg-neutral-900"
+					onclick={() => showColumnDropdown = !showColumnDropdown}
+					aria-label="Column count options"
+				>
+					<span>Columns: {columnCount}</span>
+					<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M7 10l5 5 5-5z"/>
+					</svg>
+				</button>
+				{#if showColumnDropdown}
+					<div class="absolute top-full left-0 mt-1 w-32 bg-neutral-900 border border-neutral-600 rounded shadow-xl z-20">
+						{#each [2, 3, 4] as count}
+							<button
+								class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-800 transition-colors {columnCount === count ? 'text-white bg-neutral-800' : 'text-neutral-300'}"
+								onclick={() => setColumnCount(count)}
+							>
+								{count} columns
+							</button>
+						{/each}
+					</div>
+				{/if}
 			</div>
 
 			<button
-				class="p-2 rounded border border-neutral-700 hover:border-neutral-500 transition-colors text-neutral-400 hover:text-white"
+				class="h-9 w-9 flex items-center justify-center rounded border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
 				aria-label={$theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
 				onclick={() => theme.toggleTheme($theme)}
 			>
@@ -212,7 +228,7 @@
 				{/if}
 			</button>
 			<button
-				class="p-2 rounded border border-neutral-700 hover:border-neutral-500 transition-colors text-neutral-400 hover:text-white"
+				class="h-9 w-9 flex items-center justify-center rounded border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
 				aria-label={$preferences.incognito ? 'Disable incognito mode' : 'Enable incognito mode'}
 				onclick={() => preferences.toggleIncognito()}
 			>
