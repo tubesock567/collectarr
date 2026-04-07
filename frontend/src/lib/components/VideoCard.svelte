@@ -58,17 +58,6 @@
 </script>
 
 <div class="group relative flex flex-col space-y-3 cursor-pointer">
-	{#if selectable}
-		<button
-			type="button"
-			class="absolute right-2 top-2 z-10 flex h-6 min-w-6 items-center justify-center border px-1.5 text-[10px] font-mono uppercase tracking-[0.2em] transition-colors {selected ? 'border-white bg-white text-black' : 'border-white/25 bg-black/75 text-white hover:border-white/60 hover:bg-black'}"
-			onclick={handleSelectionToggle}
-			aria-label={selected ? `Deselect ${video.title}` : `Select ${video.title}`}
-		>
-			{selected ? '✓' : '+'}
-		</button>
-	{/if}
-
 	<a
 		href={`/player/${video.id}`}
 		class="flex flex-col space-y-3"
@@ -115,6 +104,17 @@
 					</div>
 				{/if}
 			</div>
+		{/if}
+
+		{#if selectable}
+			<button
+				type="button"
+				class="absolute right-2 top-2 z-10 flex h-7 min-w-7 items-center justify-center border border-white/25 bg-black/80 px-2 text-[11px] font-mono leading-none text-white transition-colors hover:border-white/60 hover:bg-black {selected ? 'border-white bg-white text-black hover:bg-white' : ''}"
+				onclick={handleSelectionToggle}
+				aria-label={selected ? `Deselect ${video.title}` : `Select ${video.title}`}
+			>
+				{selected ? '✓' : '+'}
+			</button>
 		{/if}
 
 		<div class="absolute bottom-2 right-2 bg-black/80 px-2 py-1 text-[10px] font-mono tracking-wider text-white">

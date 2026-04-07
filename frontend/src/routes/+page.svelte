@@ -20,6 +20,7 @@
 	let sortDropdownEl = $state(null);
 	let columnDropdownEl = $state(null);
 	let metadataOptions = $state({ tags: [], actors: [] });
+	let selectionMode = $state(false);
 	let selectedVideoIds = $state([]);
 	let showMetadataPanel = $state(false);
 	let singleTagsDraft = $state([]);
@@ -185,6 +186,9 @@
 	}
 
 	function toggleVideoSelection(id) {
+		if (!selectionMode) {
+			return;
+		}
 		if (selectedVideoIds.includes(id)) {
 			selectedVideoIds = selectedVideoIds.filter((videoId) => videoId !== id);
 		} else {
@@ -241,6 +245,13 @@
 		showMetadataPanel = false;
 		metadataMessage = '';
 		resetBulkDrafts();
+	}
+
+	function toggleSelectionMode() {
+		selectionMode = !selectionMode;
+		if (!selectionMode) {
+			clearSelection();
+		}
 	}
 
 	function mergeUpdatedGroups(updatedGroups) {
@@ -376,6 +387,12 @@
 	});
 
 	$effect(() => {
+		if (!selectionMode && selectedVideoIds.length > 0) {
+			clearSelection();
+		}
+	});
+
+	$effect(() => {
 		const video = singleSelectedVideo;
 		if (!video) {
 			return;
@@ -443,6 +460,14 @@
 			</button>
 		</div>
 		<div class="flex items-center gap-3 flex-wrap sm:justify-end">
+			<button
+				class="h-9 px-3 text-xs uppercase tracking-wider border rounded-none transition-colors {selectionMode ? 'border-white bg-white text-black' : 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}"
+				onclick={toggleSelectionMode}
+				aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+			>
+				{selectionMode ? 'Selection on' : 'Select'}
+			</button>
+
 			<label class="flex items-center h-9 border border-neutral-800 bg-black text-white rounded-none overflow-hidden focus-within:border-neutral-500 transition-colors">
 				<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-500 border-r border-neutral-800 h-full flex items-center shrink-0">Search</span>
 				<input
@@ -522,7 +547,7 @@
 		</div>
 	</div>
 
-	{#if !loading && videos.length > 0}
+	{#if selectionMode && !loading && videos.length > 0}
 		<div class="mb-6 border border-neutral-800 bg-black/70 px-4 py-4">
 			<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 				<div>
@@ -592,7 +617,7 @@
 			{#each paginatedVideos as video (video.id)}
 				<VideoCard
 					{video}
-					selectable={true}
+					selectable={selectionMode}
 					selected={selectedVideoIds.includes(video.id)}
 					onToggleSelect={toggleVideoSelection}
 				/>
@@ -628,7 +653,7 @@
 	{/if}
 </div>
 
-{#if selectedCount > 0}
+{#if selectionMode && selectedCount > 0}
 	<div class="fixed inset-y-0 right-0 z-40 w-full max-w-md border-l border-neutral-800 bg-black/95 shadow-2xl backdrop-blur transition-transform duration-300 {showMetadataPanel ? 'translate-x-0' : 'translate-x-full'}">
 		<div class="flex h-full flex-col">
 			<div class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5">
