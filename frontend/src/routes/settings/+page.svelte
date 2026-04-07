@@ -23,7 +23,9 @@
 	let selectedHoverPreviews = $state(false);
 	let selectedAutoGenerate = $state(false);
 	let generatingPreviews = $state(false);
+	let previewProgress = $state(null);
 	let previewGenMessage = $state('');
+	let previewStatusRequestInFlight = $state(false);
 	let savingGenerationSettings = $state(false);
 	let generationSettingsMessage = $state('');
 	let clearingDatabase = $state(false);
@@ -46,15 +48,17 @@
 
 	onMount(async () => {
 		try {
-			const [mediaPathRes, generationRes] = await Promise.all([
-				authFetch('/api/settings/media-path'),
-				authFetch('/api/settings/generation')
-			]);
+			const mediaPathRes = await authFetch('/api/settings/media-path');
 			if (!mediaPathRes.ok) throw new Error(await readError(mediaPathRes, 'Failed to load media path'));
 			const mediaPathData = await mediaPathRes.json();
 			mediaPath = mediaPathData?.path || '';
 			newMediaPath = mediaPathData?.path || '';
+		} catch (err) {
+			mediaPathMessage = `Error: ${err.message}`;
+		}
 
+		try {
+			const generationRes = await authFetch('/api/settings/generation');
 			if (!generationRes.ok) throw new Error(await readError(generationRes, 'Failed to load generation settings'));
 			const generationData = await generationRes.json();
 			selectedThumbnails = Boolean(generationData?.generate_thumbnails);
@@ -62,8 +66,29 @@
 			selectedHoverPreviews = Boolean(generationData?.generate_hover_previews);
 			selectedAutoGenerate = Boolean(generationData?.auto_generate_during_scan);
 		} catch (err) {
-			mediaPathMessage = `Error: ${err.message}`;
+			generationSettingsMessage = `Error: ${err.message}`;
 		}
+
+		try {
+			const previewStatusRes = await authFetch('/api/previews/status');
+			if (!previewStatusRes.ok) throw new Error(await readError(previewStatusRes, 'Failed to load preview status'));
+			applyPreviewProgress(await previewStatusRes.json());
+		} catch (err) {
+			previewGenMessage = `Error: ${err.message}`;
+		}
+	});
+
+	$effect(() => {
+		if (activeTab !== 'library') {
+			return;
+		}
+
+		fetchPreviewGenerationStatus();
+		const interval = setInterval(() => {
+			fetchPreviewGenerationStatus();
+		}, 2000);
+
+		return () => clearInterval(interval);
 	});
 
 	$effect(() => {
@@ -208,15 +233,51 @@
 				})
 			});
 			if (!res.ok) throw new Error(await readError(res, 'Failed to start preview generation'));
-			await res.json();
-			previewGenMessage = 'Preview generation started. This may take a while...';
-			setTimeout(() => {
-				generatingPreviews = false;
-			}, 3000);
+			const data = await res.json();
+			applyPreviewProgress(data);
+			previewGenMessage = data?.message || 'Preview generation started.';
+			await fetchPreviewGenerationStatus();
 		} catch (err) {
 			previewGenMessage = `Error: ${err.message}`;
 			generatingPreviews = false;
+			await fetchPreviewGenerationStatus();
 		}
+	}
+
+	async function fetchPreviewGenerationStatus() {
+		if (previewStatusRequestInFlight) return;
+		previewStatusRequestInFlight = true;
+
+		try {
+			const res = await authFetch('/api/previews/status');
+			if (!res.ok) throw new Error(await readError(res, 'Failed to load preview generation status'));
+			applyPreviewProgress(await res.json());
+		} catch (err) {
+			if (generatingPreviews) {
+				previewGenMessage = `Error: ${err.message}`;
+			}
+		} finally {
+			previewStatusRequestInFlight = false;
+		}
+	}
+
+	function applyPreviewProgress(status) {
+		previewProgress = status;
+		generatingPreviews = Boolean(status?.running);
+	}
+
+	function getPreviewProgressPercent(status) {
+		if (!status) return 0;
+		if (status.total_videos <= 0) return status.running ? 0 : 100;
+		return Math.min(100, Math.round((status.processed_videos / status.total_videos) * 100));
+	}
+
+	function getPreviewStatusLabel(status) {
+		if (!status) return '';
+		if (status.status === 'running') return 'Running';
+		if (status.status === 'completed') return 'Completed';
+		if (status.status === 'failed') return 'Failed';
+		return 'Idle';
 	}
 
 	async function clearDatabase() {
@@ -486,16 +547,55 @@
 						disabled={generatingPreviews}
 						class="bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
 					>
-						{#if generatingPreviews}
-							<span class="loading loading-spinner loading-xs"></span>
-							Processing...
-						{:else}
-							Generate Previews
-						{/if}
-					</button>
+					{#if generatingPreviews}
+						<span class="loading loading-spinner loading-xs"></span>
+						{previewProgress?.processed_videos || 0}/{previewProgress?.total_videos || 0}
+					{:else}
+						Generate Previews
+					{/if}
+				</button>
 
-					{#if previewGenMessage}
-						<p class="text-xs tracking-wide {previewGenMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-3">
+				{#if previewProgress && previewProgress.status !== 'idle'}
+					<div class="mt-4 w-full border border-neutral-800 bg-black p-4 space-y-3">
+						<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+							<div>
+								<p class="text-xs uppercase tracking-widest text-neutral-400">Preview Job Status</p>
+								<p class="text-sm text-white mt-1">{getPreviewStatusLabel(previewProgress)} · {previewProgress.processed_videos}/{previewProgress.total_videos} videos</p>
+							</div>
+							<div class="text-xs uppercase tracking-widest text-neutral-500">
+								{getPreviewProgressPercent(previewProgress)}%
+							</div>
+						</div>
+
+						<div class="h-2 w-full border border-neutral-800 bg-neutral-950">
+							<div class="h-full bg-white transition-all duration-300" style={`width: ${getPreviewProgressPercent(previewProgress)}%`}></div>
+						</div>
+
+						<div class="grid gap-2 text-xs text-neutral-400 sm:grid-cols-2">
+							<p>Source: <span class="text-white uppercase">{previewProgress.source || 'manual'}</span></p>
+							<p>Errors: <span class="text-white">{previewProgress.errors}</span></p>
+							{#if previewProgress.current_step}
+								<p>Current step: <span class="text-white">{previewProgress.current_step}</span></p>
+							{/if}
+							{#if previewProgress.current_video_title}
+								<p>Current video: <span class="text-white">{previewProgress.current_video_title}</span></p>
+							{/if}
+							{#if previewProgress.started_at}
+								<p>Started: <span class="text-white">{formatLogTimestamp(previewProgress.started_at)}</span></p>
+							{/if}
+							{#if previewProgress.completed_at}
+								<p>Completed: <span class="text-white">{formatLogTimestamp(previewProgress.completed_at)}</span></p>
+							{/if}
+						</div>
+
+						{#if previewProgress.message}
+							<p class="text-xs tracking-wide {previewProgress.status === 'failed' ? 'text-red-500' : 'text-neutral-400'}">{previewProgress.message}</p>
+						{/if}
+					</div>
+				{/if}
+
+				{#if previewGenMessage}
+					<p class="text-xs tracking-wide {previewGenMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-3">
 							{previewGenMessage}
 						</p>
 					{/if}

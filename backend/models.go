@@ -109,6 +109,24 @@ type PreviewGenerationRequest struct {
 	GenerateHoverPreviews   bool `json:"generate_hover_previews"`
 }
 
+type PreviewGenerationStatus struct {
+	Status                  string     `json:"status"`
+	Source                  string     `json:"source,omitempty"`
+	Running                 bool       `json:"running"`
+	GenerateThumbnails      bool       `json:"generate_thumbnails"`
+	GenerateScrubberSprites bool       `json:"generate_scrubber_sprites"`
+	GenerateHoverPreviews   bool       `json:"generate_hover_previews"`
+	TotalVideos             int        `json:"total_videos"`
+	ProcessedVideos         int        `json:"processed_videos"`
+	CurrentVideoID          int64      `json:"current_video_id,omitempty"`
+	CurrentVideoTitle       string     `json:"current_video_title,omitempty"`
+	CurrentStep             string     `json:"current_step,omitempty"`
+	Errors                  int        `json:"errors"`
+	Message                 string     `json:"message,omitempty"`
+	StartedAt               *time.Time `json:"started_at,omitempty"`
+	CompletedAt             *time.Time `json:"completed_at,omitempty"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
