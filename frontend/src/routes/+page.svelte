@@ -1,7 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
-	import { authFetch, auth, logout } from '$lib/auth';
+	import { authFetch } from '$lib/auth';
 	import MetadataTokenInput from '$lib/components/MetadataTokenInput.svelte';
 	import VideoCard from '$lib/components/VideoCard.svelte';
 
@@ -16,7 +16,8 @@
 	let itemsPerPage = $state(24);
 	let showSortDropdown = $state(false);
 	let showColumnDropdown = $state(false);
-	let sortDropdownEl = $state(null);
+	let mobileSortDropdownEl = $state(null);
+	let desktopSortDropdownEl = $state(null);
 	let columnDropdownEl = $state(null);
 	let metadataOptions = $state({ tags: [], actors: [] });
 	let selectionMode = $state(false);
@@ -30,7 +31,6 @@
 	let bulkRemoveActors = $state([]);
 	let savingMetadata = $state(false);
 	let metadataMessage = $state('');
-	let showMobileMenu = $state(false);
 	let metadataPanelOverlayEl = $state(null);
 
 	let playlists = $state([]);
@@ -148,7 +148,10 @@
 	}
 
 	function handleClickOutside(event) {
-		if (sortDropdownEl && !sortDropdownEl.contains(event.target)) {
+		const insideSortDropdown =
+			mobileSortDropdownEl?.contains(event.target) ||
+			desktopSortDropdownEl?.contains(event.target);
+		if (!insideSortDropdown) {
 			showSortDropdown = false;
 		}
 		if (columnDropdownEl && !columnDropdownEl.contains(event.target)) {
@@ -481,15 +484,6 @@
 
 	onMount(() => {
 		document.addEventListener('click', handleClickOutside);
-		const desktopMediaQuery = window.matchMedia('(min-width: 640px)');
-
-		const handleDesktopMediaChange = (event) => {
-			if (event.matches) {
-				showMobileMenu = false;
-			}
-		};
-
-		desktopMediaQuery.addEventListener('change', handleDesktopMediaChange);
 
 		(async () => {
 			try {
@@ -503,7 +497,6 @@
 
 		return () => {
 			document.removeEventListener('click', handleClickOutside);
-			desktopMediaQuery.removeEventListener('change', handleDesktopMediaChange);
 		};
 	});
 </script>
@@ -513,21 +506,63 @@
 </svelte:head>
 
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-	<div class="flex flex-col gap-3 mb-6">
-		<div class="flex items-center justify-between gap-3">
-			<div class="flex items-center gap-3">
+	<div class="mb-6 flex flex-col gap-3">
+		<div class="sm:hidden flex flex-col gap-3">
+			<label class="flex h-9 w-full items-center self-stretch overflow-hidden border border-neutral-600 bg-neutral-900 text-white transition-colors focus-within:border-neutral-400">
+				<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-400 border-r border-neutral-600 h-full flex items-center shrink-0">Search</span>
+				<input
+					type="search"
+					value={searchQuery}
+					oninput={handleSearchInput}
+					placeholder="Title, date, tags, actors"
+					class="w-full h-full bg-neutral-900 px-3 text-sm text-white placeholder:text-neutral-500 outline-none focus:border-neutral-400"
+					aria-label="Search videos"
+				/>
+			</label>
+
+			<div class="grid grid-cols-[auto_1fr_1fr] gap-3">
 				<button
-					class="sm:hidden h-9 w-9 flex items-center justify-center border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
-					aria-label="Toggle menu"
-					aria-expanded={showMobileMenu}
-					aria-controls="mobile-library-menu"
-					onclick={() => showMobileMenu = !showMobileMenu}
+					class="h-9 w-9 flex items-center justify-center border border-neutral-600 bg-neutral-900 text-neutral-300 transition-colors hover:border-neutral-400 hover:text-white"
+					aria-label="Refresh library"
+					onclick={() => loadVideos()}
+					disabled={loading}
 				>
-					<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
-						<path d="M3 18h18v-2H3v2zm0-5h18v-2H3v2zm0-7v2h18V6H3z"/>
+					<svg class="w-5 h-5" class:animate-spin-full={isSpinning} viewBox="0 0 24 24" fill="currentColor">
+						<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
 					</svg>
 				</button>
 
+				<div class="relative min-w-0" bind:this={mobileSortDropdownEl}>
+					<button
+						class="flex h-9 w-full items-center justify-center gap-2 border border-neutral-600 bg-neutral-900 px-3 text-[10px] uppercase tracking-[0.25em] text-white transition-colors hover:border-neutral-400"
+						onclick={() => showSortDropdown = !showSortDropdown}
+						aria-label="Sort options"
+					>
+						<span class="truncate">{getSortLabel()}</span>
+						<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+							<path d="M7 10l5 5 5-5z"/>
+						</svg>
+					</button>
+					{#if showSortDropdown}
+						<div class="absolute left-0 top-full z-20 mt-1 w-full min-w-40 border border-neutral-600 bg-black shadow-xl">
+							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'dateAdded' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('dateAdded')}>Date added</button>
+							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'duration' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('duration')}>Duration</button>
+							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'alphabetical' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('alphabetical')}>Alphabetical</button>
+						</div>
+					{/if}
+				</div>
+
+				<button
+					class="h-9 min-w-0 px-3 text-[10px] uppercase tracking-[0.25em] border transition-colors {selectionMode ? 'border-white bg-white text-black' : 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}"
+					onclick={toggleSelectionMode}
+					aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+				>
+					<span class="truncate">{selectionMode ? 'On' : 'Select'}</span>
+				</button>
+			</div>
+		</div>
+
+		<div class="hidden sm:flex items-center justify-between gap-3">
 			<button
 				class="h-9 w-9 flex items-center justify-center border border-neutral-600 hover:border-neutral-400 transition-colors text-neutral-300 hover:text-white bg-neutral-900"
 				aria-label="Refresh library"
@@ -538,9 +573,8 @@
 					<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
 				</svg>
 			</button>
-			</div>
-			
-			<div class="flex items-center gap-3">
+
+			<div class="flex items-center gap-3 min-w-0 flex-1 justify-end">
 				<label class="flex h-9 w-full items-center self-stretch overflow-hidden border border-neutral-600 bg-neutral-900 text-white transition-colors focus-within:border-neutral-400 sm:w-[28rem] sm:self-auto lg:w-[34rem]">
 					<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-400 border-r border-neutral-600 h-full flex items-center shrink-0">Search</span>
 					<input
@@ -553,7 +587,7 @@
 					/>
 				</label>
 
-				<div class="relative flex-1 sm:flex-none" bind:this={sortDropdownEl}>
+				<div class="relative flex-1 sm:flex-none" bind:this={desktopSortDropdownEl}>
 					<button
 						class="w-full flex items-center justify-center sm:justify-start gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 hover:border-neutral-400 transition-colors text-white bg-neutral-900"
 						onclick={() => showSortDropdown = !showSortDropdown}
@@ -627,53 +661,6 @@
 				</button>
 			</div>
 		</div>
-		
-		{#if showMobileMenu}
-			<div id="mobile-library-menu" class="sm:hidden border border-neutral-800 bg-black/70">
-				<a
-					href="/"
-					class="flex items-center justify-between px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-colors {$page.url.pathname === '/' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:bg-neutral-900 hover:text-white'}"
-					onclick={() => showMobileMenu = false}
-				>
-					<span>Library</span>
-					{#if $page.url.pathname === '/'}
-						<span class="text-[10px] tracking-[0.25em] text-neutral-500">Active</span>
-					{/if}
-				</a>
-				<a
-					href="/playlists"
-					class="flex items-center justify-between border-t border-neutral-800 px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-colors {$page.url.pathname.startsWith('/playlists') ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:bg-neutral-900 hover:text-white'}"
-					onclick={() => showMobileMenu = false}
-				>
-					<span>Playlists</span>
-					{#if $page.url.pathname.startsWith('/playlists')}
-						<span class="text-[10px] tracking-[0.25em] text-neutral-500">Active</span>
-					{/if}
-				</a>
-				<a
-					href="/settings"
-					class="flex items-center justify-between border-t border-neutral-800 px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-colors {$page.url.pathname === '/settings' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:bg-neutral-900 hover:text-white'}"
-					onclick={() => showMobileMenu = false}
-				>
-					<span>Settings</span>
-					{#if $page.url.pathname === '/settings'}
-						<span class="text-[10px] tracking-[0.25em] text-neutral-500">Active</span>
-					{/if}
-				</a>
-				{#if $auth.isAuthenticated}
-					<button
-						class="flex w-full items-center justify-between border-t border-neutral-800 px-3 py-3 text-xs font-semibold uppercase tracking-widest text-neutral-400 transition-colors hover:bg-neutral-900 hover:text-white"
-						onclick={() => {
-							showMobileMenu = false;
-							logout();
-						}}
-					>
-						<span>Logout</span>
-						<span class="text-[10px] tracking-[0.25em] text-neutral-500">{$auth.username}</span>
-					</button>
-				{/if}
-			</div>
-		{/if}
 	</div>
 
 	{#if selectionMode && !loading && videos.length > 0}
