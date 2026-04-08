@@ -13,6 +13,7 @@
 	let mobileNavPanelEl = $state(null);
 	let mobileNavTriggerEl = $state(null);
 	let mobileNavWasOpen = $state(false);
+	let previousPathname = $state('');
 
 	function closeMobileNav({ restoreFocus = true } = {}) {
 		showMobileNav = false;
@@ -93,6 +94,7 @@
 		checkAuth();
 		theme.initTheme();
 		preferences.initPreferences();
+		previousPathname = window.location.pathname;
 
 		const desktopMediaQuery = window.matchMedia('(min-width: 640px)');
 		const handleDesktopMediaChange = (event) => {
@@ -126,10 +128,11 @@
 	});
 
 	$effect(() => {
-		$page.url.pathname;
-		if (showMobileNav) {
+		const pathname = $page.url.pathname;
+		if (previousPathname && previousPathname !== pathname && showMobileNav) {
 			closeMobileNav({ restoreFocus: false });
 		}
+		previousPathname = pathname;
 	});
 
 	$effect(() => {
