@@ -463,7 +463,7 @@
 >
 	<a
 		href={playlistId ? `/playlists/${playlistId}` : "/"}
-		class="absolute left-3 right-3 top-3 z-50 flex items-center gap-2 border border-white/20 bg-black/50 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.25em] text-white/50 backdrop-blur transition-all hover:border-white/50 hover:text-white md:left-6 md:right-24 md:top-6 md:gap-4 md:px-4 md:text-xs md:tracking-widest {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
+		class="absolute left-3 right-3 top-3 z-50 flex items-center gap-2 border border-white/20 bg-black/50 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.25em] text-white/50 backdrop-blur transition-all hover:border-white/50 hover:text-white md:left-6 md:right-auto md:top-6 md:max-w-[min(32rem,calc(100vw-12rem))] md:gap-4 md:px-4 md:text-xs md:tracking-widest {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
 	>
 		<span class="shrink-0">&larr;</span>
 		<span class="text-white/70 min-w-0 truncate text-[10px] sm:max-w-xs sm:text-xs">
