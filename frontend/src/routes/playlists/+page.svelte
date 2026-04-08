@@ -1,6 +1,7 @@
 <script>
 	import { onMount } from 'svelte';
 	import { authFetch } from '$lib/auth';
+	import { preferences } from '$lib/preferences';
 
 	let playlists = $state([]);
 	let loading = $state(true);
@@ -10,6 +11,11 @@
 	let newName = $state('');
 	let newDescription = $state('');
 	let creating = $state(false);
+
+	function playlistCoverSrc(playlist) {
+		const version = playlist?.date_updated || playlist?.date_created || '0';
+		return `/api/playlists/${playlist.id}/cover?v=${encodeURIComponent(version)}`;
+	}
 
 	async function readError(response, fallback) {
 		try {
@@ -102,7 +108,22 @@
 	{:else}
 		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
 			{#each playlists as playlist (playlist.id)}
-				<div class="border border-neutral-800 bg-black p-4 flex flex-col gap-2 hover:border-neutral-600 transition-colors">
+				<div class="border border-neutral-800 bg-black p-4 flex flex-col gap-4 hover:border-neutral-600 transition-colors">
+					<a href="/playlists/{playlist.id}" class="block">
+						<div class="relative aspect-video overflow-hidden border border-neutral-800 bg-neutral-950">
+							<div class="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px bg-neutral-800 p-px">
+								<div class="bg-neutral-900"></div>
+								<div class="bg-neutral-900"></div>
+								<div class="bg-neutral-900"></div>
+								<div class="bg-neutral-900"></div>
+							</div>
+							{#if !$preferences.incognito}
+								<img src={playlistCoverSrc(playlist)} alt="{playlist.name} cover" class="absolute inset-0 h-full w-full object-cover" />
+							{:else}
+								<div class="absolute inset-0 flex items-center justify-center bg-neutral-950/90 text-[10px] font-semibold uppercase tracking-[0.3em] text-neutral-500">Incognito</div>
+							{/if}
+						</div>
+					</a>
 					<div class="flex justify-between items-start">
 						<a href="/playlists/{playlist.id}" class="text-lg font-semibold text-white hover:underline truncate">
 							{playlist.name}

@@ -7,8 +7,18 @@ const defaultPreferences = {
 	incognito: false
 };
 
+function loadInitialPreferences() {
+	if (!browser) return defaultPreferences;
+	try {
+		const raw = localStorage.getItem(PREFS_KEY);
+		return raw ? { ...defaultPreferences, ...JSON.parse(raw) } : defaultPreferences;
+	} catch {
+		return defaultPreferences;
+	}
+}
+
 function createPreferencesStore() {
-	const { subscribe, set, update } = writable(defaultPreferences);
+	const { subscribe, set, update } = writable(loadInitialPreferences());
 
 	function applyPreferences(next) {
 		if (!browser) return;
