@@ -35,6 +35,13 @@
 	let showMobileMenu = $state(false);
 	let metadataPanelOverlayEl = $state(null);
 
+	let playlists = $state([]);
+	let showPlaylistPanel = $state(false);
+	let newPlaylistName = $state('');
+	let savingPlaylist = $state(false);
+	let playlistMessage = $state('');
+	let playlistPanelOverlayEl = $state(null);
+
 	const normalizedSearchQuery = $derived(searchQuery.trim().toLowerCase());
 	const filteredVideos = $derived.by(() => {
 		const query = normalizedSearchQuery;
@@ -181,6 +188,13 @@
 		metadataOptions = await res.json();
 	}
 
+	async function loadPlaylists() {
+		const res = await authFetch('/api/playlists');
+		if (res.ok) {
+			playlists = await res.json();
+		}
+	}
+
 	function resetBulkDrafts() {
 		bulkAddTags = [];
 		bulkRemoveTags = [];
@@ -311,6 +325,52 @@
 		}
 	}
 
+	async function addToPlaylist(playlistId) {
+		if (savingPlaylist || selectedCount === 0) return;
+		savingPlaylist = true;
+		playlistMessage = '';
+		try {
+			const existingPlaylist = playlists.find((playlist) => playlist.id === playlistId);
+			const previousCount = existingPlaylist?.item_count || 0;
+			const res = await authFetch(`/api/playlists/${playlistId}/items`, {
+				method: 'POST',
+				body: JSON.stringify({ video_ids: selectedVideoIds })
+			});
+			if (!res.ok) throw new Error(await readError(res, 'Failed to add to playlist'));
+			const playlist = await res.json();
+			const addedCount = Math.max((playlist?.items?.length || 0) - previousCount, 0);
+			playlistMessage = addedCount > 0 ? `Added ${addedCount} ${addedCount === 1 ? 'item' : 'items'} to playlist.` : 'All selected items were already in that playlist.';
+			await loadPlaylists();
+			setTimeout(() => { showPlaylistPanel = false; clearSelection(); }, 1500);
+		} catch (err) {
+			playlistMessage = err.message;
+		} finally {
+			savingPlaylist = false;
+		}
+	}
+
+	async function createPlaylist() {
+		if (savingPlaylist || selectedCount === 0 || !newPlaylistName.trim()) return;
+		savingPlaylist = true;
+		playlistMessage = '';
+		try {
+			const res = await authFetch('/api/playlists', {
+				method: 'POST',
+				body: JSON.stringify({ name: newPlaylistName, description: '', video_ids: selectedVideoIds })
+			});
+			if (!res.ok) throw new Error(await readError(res, 'Failed to create playlist'));
+			const playlist = await res.json();
+			playlistMessage = `Playlist created with ${playlist?.items?.length || 0} ${(playlist?.items?.length || 0) === 1 ? 'item' : 'items'}.`;
+			await loadPlaylists();
+			newPlaylistName = '';
+			setTimeout(() => { showPlaylistPanel = false; clearSelection(); }, 1500);
+		} catch (err) {
+			playlistMessage = err.message;
+		} finally {
+			savingPlaylist = false;
+		}
+	}
+
 	async function saveBulkMetadata() {
 		if (!selectedCount || savingMetadata || !bulkHasChanges) {
 			return;
@@ -384,10 +444,11 @@
 	});
 
 	$effect(() => {
-		if (showMetadataPanel) {
+		if (showMetadataPanel || showPlaylistPanel) {
 			document.body.style.overflow = 'hidden';
 			queueMicrotask(() => {
-				metadataPanelOverlayEl?.focus();
+				if (showMetadataPanel) metadataPanelOverlayEl?.focus();
+				if (showPlaylistPanel) playlistPanelOverlayEl?.focus();
 			});
 		} else {
 			document.body.style.overflow = '';
@@ -418,7 +479,7 @@
 
 		(async () => {
 			try {
-				await Promise.all([loadVideos(), loadMetadataOptions()]);
+				await Promise.all([loadVideos(), loadMetadataOptions(), loadPlaylists()]);
 			} catch (err) {
 				error = err.message;
 			} finally {
@@ -585,6 +646,16 @@
 					{/if}
 				</a>
 				<a
+					href="/playlists"
+					class="flex items-center justify-between border-t border-neutral-800 px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-colors {$page.url.pathname.startsWith('/playlists') ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:bg-neutral-900 hover:text-white'}"
+					onclick={() => showMobileMenu = false}
+				>
+					<span>Playlists</span>
+					{#if $page.url.pathname.startsWith('/playlists')}
+						<span class="text-[10px] tracking-[0.25em] text-neutral-500">Active</span>
+					{/if}
+				</a>
+				<a
 					href="/settings"
 					class="flex items-center justify-between border-t border-neutral-800 px-3 py-3 text-xs font-semibold uppercase tracking-widest transition-colors {$page.url.pathname === '/settings' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:bg-neutral-900 hover:text-white'}"
 					onclick={() => showMobileMenu = false}
@@ -626,6 +697,9 @@
 
 				<div class="flex flex-wrap items-center gap-2">
 					{#if selectedCount > 0}
+						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors" onclick={() => showPlaylistPanel = true}>
+							Add to Playlist
+						</button>
 						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors" onclick={() => showMetadataPanel = true}>
 							Edit selection
 						</button>
@@ -850,6 +924,90 @@
 				{#if metadataMessage}
 					<p class="mt-3 text-xs text-neutral-400">{metadataMessage}</p>
 				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
+
+{#if selectionMode && selectedCount > 0 && showPlaylistPanel}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
+		bind:this={playlistPanelOverlayEl}
+		role="button"
+		tabindex="0"
+		aria-label="Close playlist panel"
+		onclick={(e) => {
+			if (e.target === e.currentTarget) showPlaylistPanel = false;
+		}}
+		onkeydown={(e) => {
+			if (e.target !== e.currentTarget) return;
+			if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
+				e.preventDefault();
+				showPlaylistPanel = false;
+			}
+		}}
+	>
+		<div class="w-full max-w-lg overflow-hidden border border-neutral-800 bg-black shadow-2xl flex flex-col max-h-[90vh]">
+			<div class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5 shrink-0">
+				<div>
+					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Playlists</p>
+					<h2 class="mt-2 text-lg font-semibold text-white">
+						Add {selectedCount} {selectedCount === 1 ? 'video' : 'videos'} to playlist
+					</h2>
+				</div>
+				<button class="mt-0.5 text-neutral-400 hover:text-white transition-colors" aria-label="Close playlist panel" onclick={() => showPlaylistPanel = false}>
+					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+				</button>
+			</div>
+
+			<div class="px-6 py-5 space-y-6 overflow-y-auto min-h-0 flex-1">
+				<div>
+					<h3 class="text-sm uppercase tracking-widest text-neutral-400 mb-3 border-b border-neutral-800 pb-2">Create New</h3>
+					<form class="flex gap-2" onsubmit={(e) => { e.preventDefault(); createPlaylist(); }}>
+						<input 
+							type="text" 
+							bind:value={newPlaylistName} 
+							placeholder="Playlist name" 
+							class="h-10 flex-1 bg-neutral-900 border border-neutral-700 px-3 text-white outline-none focus:border-neutral-500 text-sm"
+							disabled={savingPlaylist}
+						/>
+						<button 
+							type="submit" 
+							class="h-10 px-4 text-xs font-bold uppercase tracking-widest bg-white text-black hover:bg-white/80 transition-colors disabled:opacity-50"
+							disabled={savingPlaylist || !newPlaylistName.trim()}
+						>
+							Create
+						</button>
+					</form>
+				</div>
+
+				{#if playlists.length > 0}
+					<div>
+						<h3 class="text-sm uppercase tracking-widest text-neutral-400 mb-3 border-b border-neutral-800 pb-2">Add to Existing</h3>
+						<div class="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2">
+							{#each playlists as playlist (playlist.id)}
+								<button 
+									class="flex items-center justify-between p-3 border border-neutral-800 hover:border-neutral-500 bg-neutral-950/60 hover:bg-neutral-900 transition-colors text-left"
+									onclick={() => addToPlaylist(playlist.id)}
+									disabled={savingPlaylist}
+								>
+									<span class="text-sm text-white font-medium truncate pr-4">{playlist.name}</span>
+									<span class="text-xs text-neutral-500 shrink-0">{playlist.item_count} items</span>
+								</button>
+							{/each}
+						</div>
+					</div>
+				{/if}
+
+				{#if playlistMessage}
+					<p class="text-sm text-neutral-400 p-3 bg-neutral-900 border border-neutral-800">{playlistMessage}</p>
+				{/if}
+			</div>
+
+			<div class="border-t border-neutral-800 px-6 py-5 shrink-0">
+				<button class="w-full h-10 border border-neutral-700 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white" onclick={() => showPlaylistPanel = false}>
+					Close
+				</button>
 			</div>
 		</div>
 	</div>

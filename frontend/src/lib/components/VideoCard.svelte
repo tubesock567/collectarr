@@ -5,6 +5,7 @@
 		video,
 		selectable = false,
 		selected = false,
+		playlistId = null,
 		onToggleSelect = () => {}
 	} = $props();
 
@@ -19,6 +20,7 @@
 	const hasMultiple = $derived(displayVariants.length > 1);
 	const firstVariant = $derived(displayVariants[0]);
 	const hoverPreviewSrc = $derived(`/api/video/${video.id}/hover-preview`);
+	const href = $derived(playlistId ? `/player/${video.id}?playlist=${playlistId}` : `/player/${video.id}`);
 
 	function startHover() {
 		if ($preferences.incognito) return;
@@ -66,7 +68,7 @@
 
 <div class="group relative flex flex-col space-y-3 cursor-pointer">
 	<a
-		href={`/player/${video.id}`}
+		{href}
 		class="flex flex-col space-y-3"
 		onmouseenter={startHover}
 		onmouseleave={stopHover}
