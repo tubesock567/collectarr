@@ -57,6 +57,16 @@
 		}
 	}
 
+	function handleVideoSurfaceClick() {
+		if (!showControls && !paused) {
+			resetTimer();
+			return;
+		}
+
+		togglePlay();
+		resetTimer();
+	}
+
 	function toggleFullscreen() {
 		if (!document.fullscreenElement) {
 			containerEl?.requestFullscreen();
@@ -395,6 +405,22 @@
 		if (hideTimer) clearTimeout(hideTimer);
 	});
 
+	onMount(() => {
+		const desktopInfoMediaQuery = window.matchMedia('(min-width: 768px)');
+		const handleDesktopInfoChange = (event) => {
+			if (!event.matches) {
+				showInfoPanel = false;
+			}
+		};
+
+		handleDesktopInfoChange(desktopInfoMediaQuery);
+		desktopInfoMediaQuery.addEventListener('change', handleDesktopInfoChange);
+
+		return () => {
+			desktopInfoMediaQuery.removeEventListener('change', handleDesktopInfoChange);
+		};
+	});
+
 	$effect(() => {
 		if (selectedVariantId) {
 			loadPreviewData(selectedVariantId);
@@ -437,16 +463,16 @@
 >
 	<a
 		href={playlistId ? `/playlists/${playlistId}` : "/"}
-		class="absolute top-6 left-6 z-50 flex items-center gap-4 text-white/50 hover:text-white uppercase tracking-widest text-xs font-bold px-4 py-2 border border-white/20 hover:border-white/50 transition-all bg-black/50 backdrop-blur {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
+		class="absolute left-3 right-3 top-3 z-50 flex items-center gap-2 border border-white/20 bg-black/50 px-3 py-2 text-[10px] font-bold uppercase tracking-[0.25em] text-white/50 backdrop-blur transition-all hover:border-white/50 hover:text-white md:left-6 md:right-24 md:top-6 md:gap-4 md:px-4 md:text-xs md:tracking-widest {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
 	>
-		<span>&larr; Back</span>
-		<span class="text-white/70 max-w-xs truncate">
+		<span class="shrink-0">&larr;</span>
+		<span class="text-white/70 min-w-0 truncate text-[10px] sm:max-w-xs sm:text-xs">
 			{video?.title || 'Unknown title'}
 		</span>
 	</a>
 
 	<button
-		class="absolute top-6 right-6 z-30 flex items-center gap-2 text-white/50 hover:text-white uppercase tracking-widest text-xs font-bold px-4 py-2 border border-white/20 hover:border-white/50 transition-all bg-black/50 backdrop-blur {(showControls || showInfoPanel) ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
+		class="absolute right-3 top-3 z-30 hidden items-center gap-2 border border-white/20 bg-black/50 px-4 py-2 text-xs font-bold uppercase tracking-widest text-white/50 backdrop-blur transition-all hover:border-white/50 hover:text-white md:flex md:right-6 md:top-6 {(showControls || showInfoPanel) ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
 		aria-label={showInfoPanel ? 'Hide video details' : 'Show video details'}
 		onclick={toggleInfoPanel}
 	>
@@ -477,12 +503,12 @@
 		bind:muted
 		src={videoSrc}
 		class="w-full h-full object-contain cursor-pointer"
-		onclick={togglePlay}
+		onclick={handleVideoSurfaceClick}
 	>
 		<track kind="captions" />
 	</video>
 
-	<div class="absolute inset-y-0 right-0 z-40 w-full max-w-md border-l border-neutral-200 dark:border-neutral-800 bg-white/95 dark:bg-black/95 shadow-2xl backdrop-blur transition-transform duration-300 {showInfoPanel ? 'translate-x-0' : 'translate-x-full'}">
+	<div class="absolute inset-y-0 right-0 z-40 hidden w-full max-w-md border-l border-neutral-200 bg-white/95 shadow-2xl backdrop-blur transition-transform duration-300 dark:border-neutral-800 dark:bg-black/95 md:block {showInfoPanel ? 'translate-x-0' : 'translate-x-full'}">
 		<div class="flex h-full flex-col">
 			<div class="flex items-start justify-between gap-4 border-b border-neutral-200 dark:border-neutral-800 px-6 py-5">
 				<div>
@@ -635,9 +661,10 @@
 			></div>
 		</div>
 
-		<div class="flex items-center justify-between px-6 py-4 text-white">
-			<div class="flex items-center gap-6">
-				<div class="flex items-center gap-4">
+		<div class="px-4 py-4 text-white sm:px-6">
+			<div class="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+				<div class="flex flex-wrap items-center gap-3 sm:gap-6">
+					<div class="flex items-center gap-3 sm:gap-4">
 					{#if prevVideoId}
 						<a 
 							href={`/player/${prevVideoId}?playlist=${playlistId}`}
@@ -677,19 +704,19 @@
 							</svg>
 						</a>
 					{/if}
-				</div>
+					</div>
 
-				<div class="text-sm font-medium opacity-90 font-mono">
+					<div class="min-w-0 text-xs font-medium opacity-90 font-mono sm:text-sm">
 					{formatTime(currentTime)} / {formatTime(duration)}
+					</div>
 				</div>
-			</div>
 
-			<div class="flex items-center gap-6">
+				<div class="flex flex-wrap items-center gap-3 sm:gap-6">
 				{#if video?.variants?.length > 1}
-					<label class="flex items-center gap-3 text-xs uppercase tracking-[0.2em] text-white/70">
+					<label class="flex min-w-0 items-center gap-2 text-[10px] uppercase tracking-[0.2em] text-white/70 sm:gap-3 sm:text-xs">
 						<span>Quality</span>
 						<select
-							class="border border-white/20 bg-black/50 px-3 py-2 text-white outline-none"
+							class="max-w-[7.25rem] border border-white/20 bg-black/50 px-2 py-2 text-sm text-white outline-none sm:max-w-none sm:px-3"
 							bind:value={selectedVariantId}
 							onchange={(e) => updateSelectedVariant(e.currentTarget.value)}
 						>
@@ -700,7 +727,7 @@
 					</label>
 				{/if}
 
-				<div class="flex items-center gap-3">
+				<div class="flex items-center gap-2 sm:gap-3">
 					<button 
 						class="hover:text-gray-300 transition-colors focus:outline-none"
 						aria-label={muted ? 'Unmute' : 'Mute'}
@@ -727,7 +754,7 @@
 						step="0.05" 
 						aria-label="Volume"
 						bind:value={volume}
-						class="w-20 accent-white"
+						class="w-14 accent-white sm:w-20"
 					/>
 				</div>
 
@@ -740,6 +767,7 @@
 						<path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
 					</svg>
 				</button>
+			</div>
 			</div>
 		</div>
 	</div>

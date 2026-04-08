@@ -247,7 +247,7 @@
 					<div class="mt-4 flex items-center justify-between border-t border-neutral-800 pt-4 text-[10px] font-semibold uppercase tracking-[0.3em] text-neutral-500">
 						<span>{$auth.username}</span>
 						<button class="text-neutral-400 transition-colors hover:text-white" onclick={() => logout()}>
-							Logout
+							LOGOUT
 						</button>
 					</div>
 				{/if}

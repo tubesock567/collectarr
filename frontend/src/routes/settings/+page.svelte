@@ -427,19 +427,38 @@
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
 	<h1 class="text-2xl font-bold uppercase tracking-widest mb-8 border-b border-neutral-800 pb-4">Settings</h1>
 
-	<div class="flex gap-1 mb-8 border-b border-neutral-800">
+	<div class="mb-2 flex items-center justify-between gap-3 sm:hidden">
+		<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Swipe Tabs</p>
+		<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-600">← →</p>
+	</div>
+
+	<div class="relative -mx-4 mb-8 border-b border-neutral-800 px-4 sm:mx-0 sm:px-0">
+		<div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-black to-transparent sm:hidden"></div>
+		<div
+			class="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+			role="tablist"
+			aria-label="Settings sections"
+		>
+		<div class="flex min-w-max gap-1 sm:min-w-0 sm:flex-wrap">
 		{#each tabs as tab}
 			<button
 				onclick={() => activeTab = tab.id}
-				class="px-6 py-3 text-xs uppercase tracking-widest font-semibold transition-colors {activeTab === tab.id ? 'bg-white text-black' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'}"
+				id="settings-tab-{tab.id}"
+				role="tab"
+				aria-selected={activeTab === tab.id}
+				aria-controls="settings-panel-{tab.id}"
+				tabindex={activeTab === tab.id ? 0 : -1}
+				class="shrink-0 whitespace-nowrap px-6 py-3 text-xs uppercase tracking-widest font-semibold transition-colors {activeTab === tab.id ? 'bg-white text-black' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'}"
 			>
 				{tab.label}
 			</button>
 		{/each}
+		</div>
+		</div>
 	</div>
 
 	{#if activeTab === 'account'}
-		<div class="space-y-8">
+		<div class="space-y-8" id="settings-panel-account" role="tabpanel" aria-labelledby="settings-tab-account">
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Password</h2>
@@ -486,7 +505,7 @@
 	{/if}
 
 	{#if activeTab === 'library'}
-		<div class="space-y-8">
+		<div class="space-y-8" id="settings-panel-library" role="tabpanel" aria-labelledby="settings-tab-library">
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Library Management</h2>
@@ -803,7 +822,7 @@
 	{/if}
 
 	{#if activeTab === 'system'}
-		<div class="space-y-8">
+		<div class="space-y-8" id="settings-panel-system" role="tabpanel" aria-labelledby="settings-tab-system">
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">System Info</h2>
@@ -814,7 +833,7 @@
 	{/if}
 
 	{#if activeTab === 'logs'}
-		<div class="space-y-8">
+		<div class="space-y-8" id="settings-panel-logs" role="tabpanel" aria-labelledby="settings-tab-logs">
 			<section class="border border-neutral-800 p-6 flex flex-col gap-4">
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
