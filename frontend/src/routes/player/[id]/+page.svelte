@@ -435,13 +435,13 @@
 	onmousemove={resetTimer}
 	onmouseleave={() => { if (!paused) showControls = false; }}
 >
-	<a 
-		href={playlistId ? `/playlists/${playlistId}` : "/"} 
+	<a
+		href={playlistId ? `/playlists/${playlistId}` : "/"}
 		class="absolute top-6 left-6 z-50 flex items-center gap-4 text-white/50 hover:text-white uppercase tracking-widest text-xs font-bold px-4 py-2 border border-white/20 hover:border-white/50 transition-all bg-black/50 backdrop-blur {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
 	>
 		<span>&larr; Back</span>
 		<span class="text-white/70 max-w-xs truncate">
-			{playlist ? `Playlist: ${playlist.name}` : (video?.title || 'Unknown title')}
+			{video?.title || 'Unknown title'}
 		</span>
 	</a>
 
@@ -482,15 +482,15 @@
 		<track kind="captions" />
 	</video>
 
-	<div class="absolute inset-y-0 right-0 z-40 w-full max-w-md border-l border-neutral-800 bg-black/95 shadow-2xl backdrop-blur transition-transform duration-300 {showInfoPanel ? 'translate-x-0' : 'translate-x-full'}">
+	<div class="absolute inset-y-0 right-0 z-40 w-full max-w-md border-l border-neutral-200 dark:border-neutral-800 bg-white/95 dark:bg-black/95 shadow-2xl backdrop-blur transition-transform duration-300 {showInfoPanel ? 'translate-x-0' : 'translate-x-full'}">
 		<div class="flex h-full flex-col">
-			<div class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5">
+			<div class="flex items-start justify-between gap-4 border-b border-neutral-200 dark:border-neutral-800 px-6 py-5">
 				<div>
-					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Video Details</p>
-					<h2 class="mt-2 text-lg font-semibold text-white">{video?.title || 'Unknown title'}</h2>
+					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-400">Video Details</p>
+					<h2 class="mt-2 text-lg font-semibold text-neutral-900 dark:text-white">{video?.title || 'Unknown title'}</h2>
 				</div>
 				<button
-					class="mt-0.5 text-neutral-400 hover:text-white transition-colors"
+					class="mt-0.5 text-neutral-500 hover:text-neutral-900 dark:text-neutral-400 dark:hover:text-white transition-colors"
 					aria-label="Close video details"
 					onclick={() => showInfoPanel = false}
 				>
@@ -500,27 +500,27 @@
 				</button>
 			</div>
 
-			<div class="flex-1 space-y-6 overflow-y-auto px-6 py-5 text-sm text-white/80">
-				<div class="grid gap-4 border border-neutral-800 bg-neutral-950/60 p-4">
+			<div class="flex-1 space-y-6 overflow-y-auto px-6 py-5 text-sm text-neutral-700 dark:text-white/80">
+				<div class="grid gap-4 border border-neutral-200 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 p-4">
 					<div>
-						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Duration</p>
-						<p class="mt-2 text-white">{formatTime(video?.duration || 0)}</p>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-400">Duration</p>
+						<p class="mt-2 text-neutral-900 dark:text-white">{formatTime(video?.duration || 0)}</p>
 					</div>
 					<div>
-						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Date Added</p>
-						<p class="mt-2 text-white">{formatDate(video?.date_added)}</p>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-400">Date Added</p>
+						<p class="mt-2 text-neutral-900 dark:text-white">{formatDate(video?.date_added)}</p>
 					</div>
 					<div>
-						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Last Scanned</p>
-						<p class="mt-2 text-white">{formatDate(video?.date_scanned)}</p>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-400">Last Scanned</p>
+						<p class="mt-2 text-neutral-900 dark:text-white">{formatDate(video?.date_scanned)}</p>
 					</div>
 					<div>
-						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Current Quality</p>
-						<p class="mt-2 text-white">{video?.variants?.find((variant) => variant.id === selectedVariantId)?.quality || 'Original'}</p>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-400">Current Quality</p>
+						<p class="mt-2 text-neutral-900 dark:text-white">{video?.variants?.find((variant) => variant.id === selectedVariantId)?.quality || 'Original'}</p>
 					</div>
 				</div>
 
-				<div class="space-y-4 border-t border-neutral-800 pt-6">
+				<div class="space-y-4 border-t border-neutral-200 dark:border-neutral-800 pt-6">
 					<MetadataTokenInput
 						label="Tags"
 						values={tagsDraft}
@@ -543,7 +543,7 @@
 
 					<div class="flex items-center gap-3">
 						<button
-							class="border border-white bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-black transition-colors hover:bg-white/85 disabled:border-neutral-700 disabled:bg-neutral-800 disabled:text-neutral-500"
+							class="border border-neutral-900 bg-neutral-900 px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-white transition-colors hover:bg-neutral-800 dark:border-white dark:bg-white dark:text-black dark:hover:bg-white/85 disabled:border-neutral-300 disabled:bg-neutral-200 disabled:text-neutral-400 dark:disabled:border-neutral-700 dark:disabled:bg-neutral-800 dark:disabled:text-neutral-500"
 							onclick={saveMetadata}
 							disabled={savingMetadata}
 						>
@@ -554,23 +554,23 @@
 							{/if}
 						</button>
 						{#if metadataMessage}
-							<p class="text-xs text-neutral-400">{metadataMessage}</p>
+							<p class="text-xs text-neutral-500 dark:text-neutral-400">{metadataMessage}</p>
 						{/if}
 					</div>
 				</div>
 
 				<div>
-					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Available Variants</p>
+					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-400">Available Variants</p>
 					<div class="mt-3 space-y-2">
 						{#each video?.variants || [] as variant (variant.id)}
-							<div class="border border-neutral-800 bg-neutral-950/60 px-4 py-3">
+							<div class="border border-neutral-200 dark:border-neutral-800 bg-neutral-100/60 dark:bg-neutral-950/60 px-4 py-3">
 								<div class="flex items-start justify-between gap-3">
 									<div>
-										<p class="text-white">{variant.quality || 'Original'}</p>
-										<p class="mt-1 break-all text-xs text-neutral-400">{variant.filename}</p>
+										<p class="text-neutral-900 dark:text-white">{variant.quality || 'Original'}</p>
+										<p class="mt-1 break-all text-xs text-neutral-500 dark:text-neutral-400">{variant.filename}</p>
 									</div>
 									{#if variant.id === selectedVariantId}
-										<span class="border border-neutral-700 px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-neutral-400">Playing</span>
+										<span class="border border-neutral-300 dark:border-neutral-700 px-2 py-1 text-[10px] uppercase tracking-[0.25em] text-neutral-500 dark:text-neutral-400">Playing</span>
 									{/if}
 								</div>
 							</div>
