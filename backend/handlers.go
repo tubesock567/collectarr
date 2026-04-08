@@ -93,10 +93,36 @@ func (api *API) Router() http.Handler {
 		http.Redirect(w, r, "/settings", http.StatusTemporaryRedirect)
 	}).Methods(http.MethodGet)
 
-	// Serve frontend static files
-	router.PathPrefix("/").Handler(http.FileServer(http.Dir("/app/frontend/build")))
+	spaHandler := newSPAHandler("/app/frontend/build")
+	router.PathPrefix("/").Handler(spaHandler)
 
 	return router
+}
+
+type spaHandler struct {
+	staticPath string
+	indexPath  string
+	fs         http.FileSystem
+}
+
+func newSPAHandler(staticPath string) *spaHandler {
+	return &spaHandler{
+		staticPath: staticPath,
+		indexPath:  filepath.Join(staticPath, "index.html"),
+		fs:         http.Dir(staticPath),
+	}
+}
+
+func (h *spaHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
+	path := filepath.Join(h.staticPath, filepath.Clean(r.URL.Path))
+
+	info, err := os.Stat(path)
+	if err == nil && !info.IsDir() {
+		http.FileServer(h.fs).ServeHTTP(w, r)
+		return
+	}
+
+	http.ServeFile(w, r, h.indexPath)
 }
 
 func (api *API) handleLogin(w http.ResponseWriter, r *http.Request) {
