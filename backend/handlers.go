@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/color"
 	"image/draw"
 	"image/jpeg"
 	"log/slog"
@@ -70,6 +71,7 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/videos", api.authMiddleware(http.HandlerFunc(api.handleListVideos))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/playlists", api.authMiddleware(http.HandlerFunc(api.handleListPlaylists))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/playlists", api.authMiddleware(http.HandlerFunc(api.handleCreatePlaylist))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/playlists/{id:[0-9]+}/cover", api.authMiddleware(http.HandlerFunc(api.handlePlaylistCover))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/playlists/{id:[0-9]+}", api.authMiddleware(http.HandlerFunc(api.handleGetPlaylist))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/playlists/{id:[0-9]+}", api.authMiddleware(http.HandlerFunc(api.handleUpdatePlaylist))).Methods(http.MethodPut, http.MethodOptions)
 	authRouter.Handle("/playlists/{id:[0-9]+}", api.authMiddleware(http.HandlerFunc(api.handleDeletePlaylist))).Methods(http.MethodDelete, http.MethodOptions)
@@ -327,6 +329,32 @@ func (api *API) handleGetPlaylist(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, playlist)
+}
+
+func (api *API) handlePlaylistCover(w http.ResponseWriter, r *http.Request) {
+	id, err := parseID(mux.Vars(r)["id"])
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid playlist id"})
+		return
+	}
+
+	coverPath, err := api.ensurePlaylistCover(r.Context(), id)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "playlist not found"})
+			return
+		}
+		if errors.Is(err, errThumbnailFFmpegMissing) {
+			writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "thumbnail generation requires ffmpeg"})
+			return
+		}
+		api.logger.Error("ensure playlist cover failed", "playlist_id", id, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to generate playlist cover"})
+		return
+	}
+
+	w.Header().Set("Content-Type", "image/jpeg")
+	http.ServeFile(w, r, coverPath)
 }
 
 func (api *API) handleUpdatePlaylist(w http.ResponseWriter, r *http.Request) {
@@ -1308,11 +1336,6 @@ var errThumbnailFFmpegMissing = errors.New("ffmpeg not available")
 var errPreviewFFmpegMissing = errors.New("ffmpeg not available for previews")
 
 func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bool, error) {
-	ffmpegPath, err := exec.LookPath("ffmpeg")
-	if err != nil {
-		return "", false, errThumbnailFFmpegMissing
-	}
-
 	thumbnailDir := thumbnailCacheDir()
 	if err := os.MkdirAll(thumbnailDir, 0o755); err != nil {
 		return "", false, fmt.Errorf("create thumbnail directory: %w", err)
@@ -1324,6 +1347,11 @@ func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bo
 		return thumbnailPath, false, nil
 	} else if !errors.Is(err, os.ErrNotExist) {
 		return "", false, fmt.Errorf("check thumbnail cache: %w", err)
+	}
+
+	ffmpegPath, err := exec.LookPath("ffmpeg")
+	if err != nil {
+		return "", false, errThumbnailFFmpegMissing
 	}
 
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
@@ -1351,6 +1379,173 @@ func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bo
 
 	api.logger.Info("thumbnail generated", "video_id", video.ID, "title", video.Title, "path", thumbnailPath)
 	return thumbnailPath, true, nil
+}
+
+func (api *API) ensurePlaylistCover(parent context.Context, playlistID int64) (string, error) {
+	playlist, err := api.store.GetPlaylistByID(playlistID)
+	if err != nil {
+		return "", err
+	}
+
+	coverDir := playlistCoverCacheDir()
+	if err := os.MkdirAll(coverDir, 0o755); err != nil {
+		return "", fmt.Errorf("create playlist cover directory: %w", err)
+	}
+
+	coverPath := playlistCoverFilePath(playlistID)
+	if coverInfo, err := os.Stat(coverPath); err == nil {
+		if !playlistCoverNeedsRefresh(coverInfo, playlist) {
+			return coverPath, nil
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return "", fmt.Errorf("check playlist cover cache: %w", err)
+	}
+
+	thumbPaths := make([]string, 0, 4)
+	for _, item := range playlist.Items {
+		if len(thumbPaths) == 4 {
+			break
+		}
+		thumbnailVideo, err := api.store.GetVideoForThumbnail(item.Title)
+		if err != nil {
+			continue
+		}
+		thumbnailPath, _, err := api.ensureThumbnail(parent, thumbnailVideo)
+		if err != nil {
+			return "", err
+		}
+		thumbPaths = append(thumbPaths, thumbnailPath)
+	}
+
+	if err := writePlaylistCoverImage(coverPath, thumbPaths); err != nil {
+		return "", err
+	}
+
+	return coverPath, nil
+}
+
+func playlistCoverNeedsRefresh(coverInfo os.FileInfo, playlist Playlist) bool {
+	if playlist.DateUpdated != nil && coverInfo.ModTime().Before(playlist.DateUpdated.UTC()) {
+		return true
+	}
+
+	for i, item := range playlist.Items {
+		if i == 4 {
+			break
+		}
+		thumbnailPath := thumbnailFilePath(item.Title)
+		thumbInfo, err := os.Stat(thumbnailPath)
+		if err != nil {
+			return true
+		}
+		if coverInfo.ModTime().Before(thumbInfo.ModTime()) {
+			return true
+		}
+	}
+
+	return false
+}
+
+func writePlaylistCoverImage(outputPath string, thumbPaths []string) error {
+	const coverWidth = 640
+	const coverHeight = 360
+	const columns = 2
+	const rows = 2
+	cellWidth := coverWidth / columns
+	cellHeight := coverHeight / rows
+
+	canvas := image.NewRGBA(image.Rect(0, 0, coverWidth, coverHeight))
+	background := image.NewUniform(color.Gray{Y: 22})
+	draw.Draw(canvas, canvas.Bounds(), background, image.Point{}, draw.Src)
+
+	blank := image.NewUniform(color.Gray{Y: 36})
+	for idx := 0; idx < columns*rows; idx++ {
+		x := (idx % columns) * cellWidth
+		y := (idx / columns) * cellHeight
+		cellRect := image.Rect(x, y, x+cellWidth, y+cellHeight)
+		draw.Draw(canvas, cellRect, blank, image.Point{}, draw.Src)
+	}
+
+	for idx, thumbPath := range thumbPaths {
+		if idx == columns*rows {
+			break
+		}
+		file, err := os.Open(thumbPath)
+		if err != nil {
+			continue
+		}
+		img, _, err := image.Decode(file)
+		_ = file.Close()
+		if err != nil {
+			continue
+		}
+		x := (idx % columns) * cellWidth
+		y := (idx / columns) * cellHeight
+		cellRect := image.Rect(x, y, x+cellWidth, y+cellHeight)
+		draw.Draw(canvas, cellRect, resizeAndCropToRect(img, cellWidth, cellHeight), image.Point{}, draw.Src)
+	}
+
+	tempPath := outputPath + ".tmp"
+	file, err := os.Create(tempPath)
+	if err != nil {
+		return fmt.Errorf("create playlist cover file: %w", err)
+	}
+	if err := jpeg.Encode(file, canvas, &jpeg.Options{Quality: 85}); err != nil {
+		_ = file.Close()
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("encode playlist cover: %w", err)
+	}
+	if err := file.Close(); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("close playlist cover file: %w", err)
+	}
+	if err := os.Rename(tempPath, outputPath); err != nil {
+		_ = os.Remove(tempPath)
+		return fmt.Errorf("replace playlist cover file: %w", err)
+	}
+
+	return nil
+}
+
+func resizeAndCropToRect(src image.Image, width, height int) image.Image {
+	bounds := src.Bounds()
+	srcWidth := bounds.Dx()
+	srcHeight := bounds.Dy()
+	if srcWidth == 0 || srcHeight == 0 || width <= 0 || height <= 0 {
+		return image.NewRGBA(image.Rect(0, 0, width, height))
+	}
+
+	dst := image.NewRGBA(image.Rect(0, 0, width, height))
+	srcAspect := float64(srcWidth) / float64(srcHeight)
+	dstAspect := float64(width) / float64(height)
+
+	var cropWidth, cropHeight int
+	var offsetX, offsetY int
+	if srcAspect > dstAspect {
+		cropHeight = srcHeight
+		cropWidth = int(float64(cropHeight) * dstAspect)
+		offsetX = (srcWidth - cropWidth) / 2
+	} else {
+		cropWidth = srcWidth
+		cropHeight = int(float64(cropWidth) / dstAspect)
+		offsetY = (srcHeight - cropHeight) / 2
+	}
+	if cropWidth <= 0 {
+		cropWidth = srcWidth
+	}
+	if cropHeight <= 0 {
+		cropHeight = srcHeight
+	}
+
+	for y := 0; y < height; y++ {
+		srcY := offsetY + (y*cropHeight)/height
+		for x := 0; x < width; x++ {
+			srcX := offsetX + (x*cropWidth)/width
+			dst.Set(x, y, src.At(bounds.Min.X+srcX, bounds.Min.Y+srcY))
+		}
+	}
+
+	return dst
 }
 
 func (api *API) ensurePreviewSprite(parent context.Context, video Video) (PreviewSpriteResponse, error) {
@@ -1548,6 +1743,14 @@ func hoverPreviewCacheDir() string {
 func hoverPreviewFilePath(title string) string {
 	safeTitle := sanitizeFilename(title)
 	return filepath.Join(hoverPreviewCacheDir(), fmt.Sprintf("%s.mp4", safeTitle))
+}
+
+func playlistCoverCacheDir() string {
+	return "/data/previews/playlist-covers"
+}
+
+func playlistCoverFilePath(playlistID int64) string {
+	return filepath.Join(playlistCoverCacheDir(), fmt.Sprintf("%d.jpg", playlistID))
 }
 
 func sanitizeFilename(name string) string {
