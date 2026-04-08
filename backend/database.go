@@ -743,6 +743,89 @@ func (s *Store) ListRepresentativeVideos() ([]Video, error) {
 	return videos, nil
 }
 
+func (s *Store) GetVideoForThumbnail(title string) (Video, error) {
+	row := s.db.QueryRow(`
+		SELECT id, title, filename, path, quality, duration, tags_json, actors_json, date_added, date_scanned
+		FROM videos
+		WHERE title = ?
+		ORDER BY
+			CASE quality
+				WHEN '4K' THEN 1
+				WHEN '2160p' THEN 1
+				WHEN '1080p' THEN 2
+				WHEN '720p' THEN 3
+				WHEN '480p' THEN 4
+				ELSE 5
+			END,
+			id DESC
+		LIMIT 1`, title)
+
+	video, err := scanVideoDetail(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Video{}, err
+		}
+		return Video{}, fmt.Errorf("get video for thumbnail: %w", err)
+	}
+
+	return video, nil
+}
+
+func (s *Store) GetVideoForScrubber(title string) (Video, error) {
+	row := s.db.QueryRow(`
+		SELECT id, title, filename, path, quality, duration, tags_json, actors_json, date_added, date_scanned
+		FROM videos
+		WHERE title = ?
+		ORDER BY
+			CASE quality
+				WHEN '480p' THEN 1
+				WHEN '720p' THEN 2
+				WHEN '1080p' THEN 3
+				WHEN '2160p' THEN 4
+				WHEN '4K' THEN 4
+				ELSE 5
+			END,
+			id DESC
+		LIMIT 1`, title)
+
+	video, err := scanVideoDetail(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Video{}, err
+		}
+		return Video{}, fmt.Errorf("get video for scrubber: %w", err)
+	}
+
+	return video, nil
+}
+
+func (s *Store) GetVideoForPreview(title string) (Video, error) {
+	return s.GetVideoForThumbnail(title)
+}
+
+func (s *Store) ListAllTitles() ([]string, error) {
+	rows, err := s.db.Query(`SELECT DISTINCT title FROM videos ORDER BY title`)
+	if err != nil {
+		return nil, fmt.Errorf("query titles: %w", err)
+	}
+	defer rows.Close()
+
+	var titles []string
+	for rows.Next() {
+		var title string
+		if err := rows.Scan(&title); err != nil {
+			return nil, fmt.Errorf("scan title: %w", err)
+		}
+		titles = append(titles, title)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate titles: %w", err)
+	}
+
+	return titles, nil
+}
+
 func (s *Store) ListVideoGroups() ([]VideoGroup, error) {
 	rows, err := s.db.Query(`
 		SELECT id, title, filename, quality, duration, tags_json, actors_json, date_added, date_scanned

@@ -652,21 +652,28 @@ func (api *API) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	thumbnailPath, generated, err := api.ensureThumbnail(r.Context(), video)
+	thumbnailVideo, err := api.store.GetVideoForThumbnail(video.Title)
+	if err != nil {
+		api.logger.Error("get video for thumbnail failed", "title", video.Title, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to get video for thumbnail"})
+		return
+	}
+
+	thumbnailPath, generated, err := api.ensureThumbnail(r.Context(), thumbnailVideo)
 	if err != nil {
 		if errors.Is(err, errThumbnailFFmpegMissing) {
 			writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "thumbnail generation requires ffmpeg"})
 			return
 		}
 
-		api.logger.Error("ensure thumbnail failed", "id", video.ID, "error", err)
+		api.logger.Error("ensure thumbnail failed", "title", video.Title, "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to generate thumbnail"})
 		return
 	}
 
 	if !generated {
 		if _, err := os.Stat(thumbnailPath); err != nil {
-			api.logger.Error("check thumbnail failed", "id", video.ID, "error", err)
+			api.logger.Error("check thumbnail failed", "title", video.Title, "error", err)
 			writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load thumbnail"})
 			return
 		}
@@ -683,14 +690,21 @@ func (api *API) handlePreviewMetadata(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	preview, err := api.ensurePreviewSprite(r.Context(), video)
+	scrubberVideo, err := api.store.GetVideoForScrubber(video.Title)
+	if err != nil {
+		api.logger.Error("get video for scrubber failed", "title", video.Title, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to get video for scrubber"})
+		return
+	}
+
+	preview, err := api.ensurePreviewSprite(r.Context(), scrubberVideo)
 	if err != nil {
 		if errors.Is(err, errPreviewFFmpegMissing) {
 			writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "preview generation requires ffmpeg"})
 			return
 		}
 
-		api.logger.Error("ensure preview sprite failed", "id", video.ID, "error", err)
+		api.logger.Error("ensure preview sprite failed", "title", video.Title, "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to generate preview sprite"})
 		return
 	}
@@ -705,20 +719,27 @@ func (api *API) handlePreviewSprite(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	_, err = api.ensurePreviewSprite(r.Context(), video)
+	scrubberVideo, err := api.store.GetVideoForScrubber(video.Title)
+	if err != nil {
+		api.logger.Error("get video for scrubber failed", "title", video.Title, "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to get video for scrubber"})
+		return
+	}
+
+	_, err = api.ensurePreviewSprite(r.Context(), scrubberVideo)
 	if err != nil {
 		if errors.Is(err, errPreviewFFmpegMissing) {
 			writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "preview generation requires ffmpeg"})
 			return
 		}
 
-		api.logger.Error("load preview sprite failed", "id", video.ID, "error", err)
+		api.logger.Error("load preview sprite failed", "title", video.Title, "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load preview sprite"})
 		return
 	}
 
 	w.Header().Set("Content-Type", "image/jpeg")
-	http.ServeFile(w, r, previewSpriteFilePath(video.ID))
+	http.ServeFile(w, r, previewSpriteFilePath(video.Title))
 }
 
 func (api *API) handleHoverPreview(w http.ResponseWriter, r *http.Request) {
@@ -728,13 +749,13 @@ func (api *API) handleHoverPreview(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	previewPath, err := api.getHoverPreviewPath(video)
-	if err != nil {
-		if errors.Is(err, errPreviewNotFound) {
+	previewPath := hoverPreviewFilePath(video.Title)
+	if _, err := os.Stat(previewPath); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
 			writeJSON(w, http.StatusNotFound, errorResponse{Error: "preview not found"})
 			return
 		}
-		api.logger.Error("load hover preview failed", "id", video.ID, "error", err)
+		api.logger.Error("check hover preview failed", "title", video.Title, "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load hover preview"})
 		return
 	}
@@ -769,20 +790,20 @@ func (api *API) handleGeneratePreviews(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	videos, err := api.store.ListRepresentativeVideos()
+	titles, err := api.store.ListAllTitles()
 	if err != nil {
-		api.logger.Error("failed to list videos for preview generation", "error", err)
+		api.logger.Error("failed to list titles for preview generation", "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to start preview generation"})
 		return
 	}
 
-	status, started := api.beginPreviewGeneration("manual", req, len(videos))
+	status, started := api.beginPreviewGeneration("manual", req, len(titles))
 	if !started {
 		writeJSON(w, http.StatusConflict, errorResponse{Error: "preview generation is already running"})
 		return
 	}
 
-	if len(videos) == 0 {
+	if len(titles) == 0 {
 		api.finishPreviewGeneration("completed", "No videos available for preview generation.")
 		writeJSON(w, http.StatusOK, api.currentPreviewGenerationStatus())
 		return
@@ -792,7 +813,7 @@ func (api *API) handleGeneratePreviews(w http.ResponseWriter, r *http.Request) {
 	api.thumbWg.Add(1)
 	go func() {
 		defer api.thumbWg.Done()
-		api.generatePreviews(context.Background(), req, videos)
+		api.generatePreviews(context.Background(), req, titles)
 	}()
 
 	writeJSON(w, http.StatusAccepted, status)
@@ -802,35 +823,47 @@ func (api *API) handleGetPreviewGenerationStatus(w http.ResponseWriter, r *http.
 	writeJSON(w, http.StatusOK, api.currentPreviewGenerationStatus())
 }
 
-func (api *API) generatePreviews(parent context.Context, req PreviewGenerationRequest, videos []Video) {
-	api.logger.Info("starting preview generation", "thumbnails", req.GenerateThumbnails, "scrubber_sprites", req.GenerateScrubberSprites, "hover_previews", req.GenerateHoverPreviews)
+func (api *API) generatePreviews(parent context.Context, req PreviewGenerationRequest, titles []string) {
+	api.logger.Info("starting preview generation", "thumbnails", req.GenerateThumbnails, "scrubber_sprites", req.GenerateScrubberSprites, "hover_previews", req.GenerateHoverPreviews, "titles", len(titles))
 
-	for _, video := range videos {
+	for _, title := range titles {
 		if req.GenerateThumbnails {
-			api.updatePreviewGenerationStep(video, "Generating thumbnails")
-			if _, _, err := api.ensureThumbnail(parent, video); err != nil {
-				api.logger.Error("generate thumbnail failed", "video_id", video.ID, "title", video.Title, "error", err)
+			api.updatePreviewGenerationStep(title, "Generating thumbnails")
+			video, err := api.store.GetVideoForThumbnail(title)
+			if err != nil {
+				api.logger.Error("get video for thumbnail failed", "title", title, "error", err)
+				api.incrementPreviewGenerationErrors()
+			} else if _, _, err := api.ensureThumbnail(parent, video); err != nil {
+				api.logger.Error("generate thumbnail failed", "title", title, "error", err)
 				api.incrementPreviewGenerationErrors()
 			}
 		}
 		if req.GenerateScrubberSprites {
-			api.updatePreviewGenerationStep(video, "Generating scrubber sprites")
-			if _, err := api.ensurePreviewSprite(parent, video); err != nil {
-				api.logger.Error("generate scrubber sprite failed", "video_id", video.ID, "title", video.Title, "error", err)
+			api.updatePreviewGenerationStep(title, "Generating scrubber sprites")
+			video, err := api.store.GetVideoForScrubber(title)
+			if err != nil {
+				api.logger.Error("get video for scrubber failed", "title", title, "error", err)
+				api.incrementPreviewGenerationErrors()
+			} else if _, err := api.ensurePreviewSprite(parent, video); err != nil {
+				api.logger.Error("generate scrubber sprite failed", "title", title, "error", err)
 				api.incrementPreviewGenerationErrors()
 			}
 		}
 		if req.GenerateHoverPreviews {
-			api.updatePreviewGenerationStep(video, "Generating hover previews")
-			if _, err := api.ensureHoverPreview(parent, video); err != nil {
-				api.logger.Error("generate hover preview failed", "video_id", video.ID, "title", video.Title, "error", err)
+			api.updatePreviewGenerationStep(title, "Generating hover previews")
+			video, err := api.store.GetVideoForPreview(title)
+			if err != nil {
+				api.logger.Error("get video for preview failed", "title", title, "error", err)
+				api.incrementPreviewGenerationErrors()
+			} else if _, err := api.ensureHoverPreview(parent, video); err != nil {
+				api.logger.Error("generate hover preview failed", "title", title, "error", err)
 				api.incrementPreviewGenerationErrors()
 			}
 		}
 		api.completePreviewGenerationVideo()
 	}
 
-	api.logger.Info("preview generation complete", "videos", len(videos))
+	api.logger.Info("preview generation complete", "titles", len(titles))
 	status := api.currentPreviewGenerationStatus()
 	message := "Preview generation complete."
 	if status.Errors > 0 {
@@ -852,9 +885,9 @@ func (api *API) generateConfiguredPreviewAssets(parent context.Context) {
 		return
 	}
 
-	videos, err := api.store.ListRepresentativeVideos()
+	titles, err := api.store.ListAllTitles()
 	if err != nil {
-		api.logger.Error("failed to list videos for preview generation", "error", err)
+		api.logger.Error("failed to list titles for preview generation", "error", err)
 		return
 	}
 
@@ -864,42 +897,54 @@ func (api *API) generateConfiguredPreviewAssets(parent context.Context) {
 		GenerateHoverPreviews:   settings.GenerateHoverPreviews,
 	}
 
-	if _, started := api.beginPreviewGeneration("scan", req, len(videos)); !started {
+	if _, started := api.beginPreviewGeneration("scan", req, len(titles)); !started {
 		api.logger.Info("skipping configured preview generation because another job is already running")
 		return
 	}
 
-	if len(videos) == 0 {
+	if len(titles) == 0 {
 		api.finishPreviewGeneration("completed", "No videos available for preview generation.")
 		return
 	}
 
-	api.logger.Info("starting configured preview asset generation", "videos", len(videos), "thumbnails", settings.GenerateThumbnails, "scrubber_sprites", settings.GenerateScrubberSprites, "hover_previews", settings.GenerateHoverPreviews)
-	for _, video := range videos {
+	api.logger.Info("starting configured preview asset generation", "titles", len(titles), "thumbnails", settings.GenerateThumbnails, "scrubber_sprites", settings.GenerateScrubberSprites, "hover_previews", settings.GenerateHoverPreviews)
+	for _, title := range titles {
 		if settings.GenerateThumbnails {
-			api.updatePreviewGenerationStep(video, "Generating thumbnails")
-			if _, _, err := api.ensureThumbnail(parent, video); err != nil {
-				api.logger.Error("generate thumbnail failed", "video_id", video.ID, "title", video.Title, "error", err)
+			api.updatePreviewGenerationStep(title, "Generating thumbnails")
+			video, err := api.store.GetVideoForThumbnail(title)
+			if err != nil {
+				api.logger.Error("get video for thumbnail failed", "title", title, "error", err)
+				api.incrementPreviewGenerationErrors()
+			} else if _, _, err := api.ensureThumbnail(parent, video); err != nil {
+				api.logger.Error("generate thumbnail failed", "title", title, "error", err)
 				api.incrementPreviewGenerationErrors()
 			}
 		}
 		if settings.GenerateScrubberSprites {
-			api.updatePreviewGenerationStep(video, "Generating scrubber sprites")
-			if _, err := api.ensurePreviewSprite(parent, video); err != nil {
-				api.logger.Error("generate scrubber sprite failed", "video_id", video.ID, "title", video.Title, "error", err)
+			api.updatePreviewGenerationStep(title, "Generating scrubber sprites")
+			video, err := api.store.GetVideoForScrubber(title)
+			if err != nil {
+				api.logger.Error("get video for scrubber failed", "title", title, "error", err)
+				api.incrementPreviewGenerationErrors()
+			} else if _, err := api.ensurePreviewSprite(parent, video); err != nil {
+				api.logger.Error("generate scrubber sprite failed", "title", title, "error", err)
 				api.incrementPreviewGenerationErrors()
 			}
 		}
 		if settings.GenerateHoverPreviews {
-			api.updatePreviewGenerationStep(video, "Generating hover previews")
-			if _, err := api.ensureHoverPreview(parent, video); err != nil {
-				api.logger.Error("generate hover preview failed", "video_id", video.ID, "title", video.Title, "error", err)
+			api.updatePreviewGenerationStep(title, "Generating hover previews")
+			video, err := api.store.GetVideoForPreview(title)
+			if err != nil {
+				api.logger.Error("get video for preview failed", "title", title, "error", err)
+				api.incrementPreviewGenerationErrors()
+			} else if _, err := api.ensureHoverPreview(parent, video); err != nil {
+				api.logger.Error("generate hover preview failed", "title", title, "error", err)
 				api.incrementPreviewGenerationErrors()
 			}
 		}
 		api.completePreviewGenerationVideo()
 	}
-	api.logger.Info("configured preview asset generation complete", "videos", len(videos))
+	api.logger.Info("configured preview asset generation complete", "titles", len(titles))
 	status := api.currentPreviewGenerationStatus()
 	message := "Preview generation complete."
 	if status.Errors > 0 {
@@ -944,12 +989,11 @@ func (api *API) beginPreviewGeneration(source string, req PreviewGenerationReque
 	return api.previewStatus, true
 }
 
-func (api *API) updatePreviewGenerationStep(video Video, step string) {
+func (api *API) updatePreviewGenerationStep(title string, step string) {
 	api.previewMu.Lock()
 	defer api.previewMu.Unlock()
 
-	api.previewStatus.CurrentVideoID = video.ID
-	api.previewStatus.CurrentVideoTitle = video.Title
+	api.previewStatus.CurrentVideoTitle = title
 	api.previewStatus.CurrentStep = step
 	api.previewStatus.Message = fmt.Sprintf("%s (%d/%d)", step, api.previewStatus.ProcessedVideos+1, api.previewStatus.TotalVideos)
 }
@@ -998,21 +1042,27 @@ func (api *API) currentPreviewGenerationStatus() PreviewGenerationStatus {
 func (api *API) generateAllThumbnails() {
 	api.logger.Info("starting bulk thumbnail generation")
 
-	videos, err := api.store.ListRepresentativeVideos()
+	titles, err := api.store.ListAllTitles()
 	if err != nil {
-		api.logger.Error("failed to list videos for thumbnails", "error", err)
+		api.logger.Error("failed to list titles for thumbnails", "error", err)
 		return
 	}
 
-	for i, video := range videos {
-		api.logger.Info("generating thumbnail", "video_id", video.ID, "title", video.Title, "progress", fmt.Sprintf("%d/%d", i+1, len(videos)))
+	for i, title := range titles {
+		api.logger.Info("generating thumbnail", "title", title, "progress", fmt.Sprintf("%d/%d", i+1, len(titles)))
 
-		thumbnailPath := thumbnailFilePath(video.ID)
+		thumbnailPath := thumbnailFilePath(title)
 		if _, err := os.Stat(thumbnailPath); err == nil {
-			api.logger.Info("skipping cached thumbnail", "video_id", video.ID, "title", video.Title)
+			api.logger.Info("skipping cached thumbnail", "title", title)
 			continue
 		} else if !errors.Is(err, os.ErrNotExist) {
-			api.logger.Error("check cached thumbnail failed", "video_id", video.ID, "error", err)
+			api.logger.Error("check cached thumbnail failed", "title", title, "error", err)
+			continue
+		}
+
+		video, err := api.store.GetVideoForThumbnail(title)
+		if err != nil {
+			api.logger.Error("get video for thumbnail failed", "title", title, "error", err)
 			continue
 		}
 
@@ -1022,16 +1072,15 @@ func (api *API) generateAllThumbnails() {
 				return
 			}
 
-			api.logger.Error("generate thumbnail in bulk failed", "video_id", video.ID, "title", video.Title, "error", err)
+			api.logger.Error("generate thumbnail in bulk failed", "title", title, "error", err)
 		}
 	}
 
-	api.logger.Info("bulk thumbnail generation complete", "total", len(videos))
+	api.logger.Info("bulk thumbnail generation complete", "total", len(titles))
 }
 
 var errThumbnailFFmpegMissing = errors.New("ffmpeg not available")
 var errPreviewFFmpegMissing = errors.New("ffmpeg not available for previews")
-var errPreviewNotFound = errors.New("preview not found")
 
 func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bool, error) {
 	ffmpegPath, err := exec.LookPath("ffmpeg")
@@ -1044,7 +1093,7 @@ func (api *API) ensureThumbnail(parent context.Context, video Video) (string, bo
 		return "", false, fmt.Errorf("create thumbnail directory: %w", err)
 	}
 
-	thumbnailPath := thumbnailFilePath(video.ID)
+	thumbnailPath := thumbnailFilePath(video.Title)
 	if _, err := os.Stat(thumbnailPath); err == nil {
 		api.logger.Info("thumbnail cache hit", "video_id", video.ID, "title", video.Title)
 		return thumbnailPath, false, nil
@@ -1090,8 +1139,8 @@ func (api *API) ensurePreviewSprite(parent context.Context, video Video) (Previe
 		return PreviewSpriteResponse{}, fmt.Errorf("create preview directory: %w", err)
 	}
 
-	spritePath := previewSpriteFilePath(video.ID)
-	metadataPath := previewMetadataFilePath(video.ID)
+	spritePath := previewSpriteFilePath(video.Title)
+	metadataPath := previewMetadataFilePath(video.Title)
 	sourceInfo, err := os.Stat(video.Path)
 	if err != nil {
 		return PreviewSpriteResponse{}, fmt.Errorf("stat source video: %w", err)
@@ -1182,7 +1231,7 @@ func (api *API) ensureHoverPreview(parent context.Context, video Video) (string,
 		return "", fmt.Errorf("create hover preview directory: %w", err)
 	}
 
-	previewPath := hoverPreviewFilePath(video.ID)
+	previewPath := hoverPreviewFilePath(video.Title)
 	sourceInfo, err := os.Stat(video.Path)
 	if err != nil {
 		return "", fmt.Errorf("stat source video: %w", err)
@@ -1244,47 +1293,51 @@ func (api *API) ensureHoverPreview(parent context.Context, video Video) (string,
 	return previewPath, nil
 }
 
-func (api *API) getHoverPreviewPath(video Video) (string, error) {
-	previewPath := hoverPreviewFilePath(video.ID)
-	sourceInfo, err := os.Stat(video.Path)
-	if err != nil {
-		return "", fmt.Errorf("stat source video: %w", err)
-	}
-	if previewInfo, err := os.Stat(previewPath); err == nil && previewInfo.ModTime().After(sourceInfo.ModTime()) {
-		return previewPath, nil
-	} else if errors.Is(err, os.ErrNotExist) {
-		return "", errPreviewNotFound
-	} else {
-		return "", fmt.Errorf("check preview cache: %w", err)
-	}
-}
-
 func thumbnailCacheDir() string {
-	return filepath.Join(os.TempDir(), "collectarr-thumbnails")
+	return "/data/previews/thumbnails"
 }
 
-func thumbnailFilePath(videoID int64) string {
-	return filepath.Join(thumbnailCacheDir(), fmt.Sprintf("%d.jpg", videoID))
+func thumbnailFilePath(title string) string {
+	safeTitle := sanitizeFilename(title)
+	return filepath.Join(thumbnailCacheDir(), fmt.Sprintf("%s.jpg", safeTitle))
 }
 
 func previewCacheDir() string {
-	return filepath.Join(os.TempDir(), "collectarr-preview-sprites")
+	return "/data/previews/scrubber-sprites"
 }
 
-func previewSpriteFilePath(videoID int64) string {
-	return filepath.Join(previewCacheDir(), fmt.Sprintf("%d.jpg", videoID))
+func previewSpriteFilePath(title string) string {
+	safeTitle := sanitizeFilename(title)
+	return filepath.Join(previewCacheDir(), fmt.Sprintf("%s.jpg", safeTitle))
 }
 
-func previewMetadataFilePath(videoID int64) string {
-	return filepath.Join(previewCacheDir(), fmt.Sprintf("%d.json", videoID))
+func previewMetadataFilePath(title string) string {
+	safeTitle := sanitizeFilename(title)
+	return filepath.Join(previewCacheDir(), fmt.Sprintf("%s.json", safeTitle))
 }
 
 func hoverPreviewCacheDir() string {
-	return filepath.Join(os.TempDir(), "collectarr-hover-previews")
+	return "/data/previews/hover-previews"
 }
 
-func hoverPreviewFilePath(videoID int64) string {
-	return filepath.Join(hoverPreviewCacheDir(), fmt.Sprintf("%d-v3.mp4", videoID))
+func hoverPreviewFilePath(title string) string {
+	safeTitle := sanitizeFilename(title)
+	return filepath.Join(hoverPreviewCacheDir(), fmt.Sprintf("%s.mp4", safeTitle))
+}
+
+func sanitizeFilename(name string) string {
+	replacer := strings.NewReplacer(
+		"/", "_",
+		"\\", "_",
+		":", "_",
+		"*", "_",
+		"?", "_",
+		"\"", "_",
+		"<", "_",
+		">", "_",
+		"|", "_",
+	)
+	return replacer.Replace(name)
 }
 
 func generatePreviewFrame(parent context.Context, ffmpegPath, videoPath, outputPath string, timestamp float64, width, height int) error {
