@@ -93,16 +93,13 @@
 			<div class="flex-1">
 				<div class="mb-4 max-w-3xl overflow-hidden border border-neutral-800 bg-neutral-950">
 					<div class="relative aspect-[16/9]">
-						<div class="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px bg-neutral-800 p-px">
-							<div class="bg-neutral-900"></div>
-							<div class="bg-neutral-900"></div>
-							<div class="bg-neutral-900"></div>
-							<div class="bg-neutral-900"></div>
-						</div>
-						{#if playlist && !$preferences.incognito}
-							<img src={playlistCoverSrc(playlist)} alt="{playlist.name} cover" class="absolute inset-0 h-full w-full object-cover" />
-						{:else if $preferences.incognito}
-							<div class="absolute inset-0 flex items-center justify-center bg-neutral-950/90 text-xs font-semibold uppercase tracking-[0.35em] text-neutral-500">Incognito</div>
+						{#if playlist}
+							<img src={playlistCoverSrc(playlist)} alt="{playlist.name} cover" class="absolute inset-0 h-full w-full object-cover" class:blur-md={$preferences.incognito} class:brightness-75={$preferences.incognito} />
+						{/if}
+						{#if $preferences.incognito}
+							<div class="absolute inset-0 flex items-center justify-center bg-black/50">
+								<span class="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">Incognito</span>
+							</div>
 						{/if}
 					</div>
 				</div>

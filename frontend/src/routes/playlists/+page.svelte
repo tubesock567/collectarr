@@ -111,16 +111,11 @@
 				<div class="border border-neutral-800 bg-black p-4 flex flex-col gap-4 hover:border-neutral-600 transition-colors">
 					<a href="/playlists/{playlist.id}" class="block">
 						<div class="relative aspect-video overflow-hidden border border-neutral-800 bg-neutral-950">
-							<div class="absolute inset-0 grid grid-cols-2 grid-rows-2 gap-px bg-neutral-800 p-px">
-								<div class="bg-neutral-900"></div>
-								<div class="bg-neutral-900"></div>
-								<div class="bg-neutral-900"></div>
-								<div class="bg-neutral-900"></div>
-							</div>
-							{#if !$preferences.incognito}
-								<img src={playlistCoverSrc(playlist)} alt="{playlist.name} cover" class="absolute inset-0 h-full w-full object-cover" />
-							{:else}
-								<div class="absolute inset-0 flex items-center justify-center bg-neutral-950/90 text-[10px] font-semibold uppercase tracking-[0.3em] text-neutral-500">Incognito</div>
+							<img src={playlistCoverSrc(playlist)} alt="{playlist.name} cover" class="absolute inset-0 h-full w-full object-cover" class:blur-md={$preferences.incognito} class:brightness-75={$preferences.incognito} />
+							{#if $preferences.incognito}
+								<div class="absolute inset-0 flex items-center justify-center bg-black/50">
+									<span class="text-[10px] font-semibold uppercase tracking-[0.3em] text-white/70">Incognito</span>
+								</div>
 							{/if}
 						</div>
 					</a>
