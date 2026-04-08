@@ -3,7 +3,6 @@
 	import { page } from '$app/stores';
 	import { authFetch } from '$lib/auth';
 	import VideoCard from '$lib/components/VideoCard.svelte';
-	import { preferences } from '$lib/preferences';
 
 	let playlistId = $derived($page.params.id);
 	let playlist = $state(null);
@@ -14,11 +13,6 @@
 	let editName = $state('');
 	let editDescription = $state('');
 	let saving = $state(false);
-
-	function playlistCoverSrc(playlist) {
-		const version = playlist?.date_updated || playlist?.date_created || '0';
-		return `/api/playlists/${playlist.id}/cover?v=${encodeURIComponent(version)}`;
-	}
 
 	async function readError(response, fallback) {
 		try {
@@ -91,18 +85,6 @@
 		</a>
 		<div class="flex-1 flex justify-between items-start">
 			<div class="flex-1">
-				<div class="mb-4 max-w-3xl overflow-hidden border border-neutral-800 bg-neutral-950">
-					<div class="relative aspect-[16/9]">
-						{#if playlist}
-							<img src={playlistCoverSrc(playlist)} alt="{playlist.name} cover" class="absolute inset-0 h-full w-full object-cover" class:blur-md={$preferences.incognito} class:brightness-75={$preferences.incognito} />
-						{/if}
-						{#if $preferences.incognito}
-							<div class="absolute inset-0 flex items-center justify-center bg-black/50">
-								<span class="text-xs font-semibold uppercase tracking-[0.35em] text-white/70">Incognito</span>
-							</div>
-						{/if}
-					</div>
-				</div>
 				<h1 class="text-xl font-bold tracking-widest uppercase text-white">{playlist?.name || 'Loading...'}</h1>
 				{#if playlist?.description}
 					<p class="text-sm text-neutral-400 mt-2 max-w-3xl">{playlist.description}</p>
