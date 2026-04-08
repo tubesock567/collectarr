@@ -13,6 +13,7 @@ function createThemeStore() {
 		document.documentElement.dataset.theme = nextTheme;
 		document.documentElement.classList.toggle('theme-light', nextTheme === 'light');
 		document.documentElement.classList.toggle('theme-dark', nextTheme === 'dark');
+		document.documentElement.classList.toggle('dark', nextTheme === 'dark');
 		localStorage.setItem(THEME_KEY, nextTheme);
 		set(nextTheme);
 	}
