@@ -33,7 +33,11 @@
 	let showControls = $state(true);
 	let hideTimer = null;
 	
-	const id = $page.params.id;
+	let id = $derived($page.params.id);
+	const playlistId = $derived($page.url.searchParams.get('playlist'));
+	let playlist = $state(null);
+	let nextVideoId = $state(null);
+	let prevVideoId = $state(null);
 	
 	function resetTimer() {
 		showControls = true;
@@ -145,7 +149,7 @@
 				document.exitFullscreen();
 			} else {
 				e.preventDefault();
-				goto('/');
+				goto(playlistId ? `/playlists/${playlistId}` : '/');
 			}
 			break;
 	}
@@ -155,6 +159,28 @@
 		const rect = e.currentTarget.getBoundingClientRect();
 		const pos = (e.clientX - rect.left) / rect.width;
 		if (videoEl) videoEl.currentTime = pos * duration;
+	}
+
+	function seekByKeyboard(event) {
+		if (!videoEl) return;
+		switch (event.key) {
+			case 'ArrowLeft':
+				event.preventDefault();
+				videoEl.currentTime = Math.max(0, currentTime - 5);
+				break;
+			case 'ArrowRight':
+				event.preventDefault();
+				videoEl.currentTime = Math.min(duration, currentTime + 5);
+				break;
+			case 'Home':
+				event.preventDefault();
+				videoEl.currentTime = 0;
+				break;
+			case 'End':
+				event.preventDefault();
+				videoEl.currentTime = duration;
+				break;
+		}
 	}
 
 	function nearestPreviewIndex(time) {
@@ -299,14 +325,54 @@
 
 	let videoSrc = $derived(selectedVariantId ? `/api/video/${selectedVariantId}/stream` : '');
 
-		onMount(async () => {
+	import { untrack } from 'svelte';
+
+	async function loadVideoAndPlaylist(currentId, currentPlaylistId) {
+		loading = true;
+		loadError = null;
+		video = null;
+		selectedVariantId = null;
+		playlist = null;
+		prevVideoId = null;
+		nextVideoId = null;
+		previewData = null;
+		previewError = null;
+		currentTime = 0;
+		paused = true;
 		resetTimer();
 		try {
-			const videoRes = await authFetch(`/api/videos/${id}`);
+			const videoRes = await authFetch(`/api/videos/${currentId}`);
 			if (!videoRes.ok) throw new Error('Failed to load video');
 			video = await videoRes.json();
 			syncMetadataDrafts(video);
-			selectedVariantId = video?.variants?.[0]?.id ?? Number(id);
+			selectedVariantId = video?.variants?.[0]?.id ?? Number(currentId);
+			
+			if (currentPlaylistId) {
+				try {
+					const res = await authFetch(`/api/playlists/${currentPlaylistId}`);
+					if (res.ok) {
+						playlist = await res.json();
+						const items = playlist.items || [];
+						const index = items.findIndex((v) => v.id === Number(currentId));
+						if (index >= 0) {
+							prevVideoId = index > 0 ? items[index - 1].id : null;
+							nextVideoId = index < items.length - 1 ? items[index + 1].id : null;
+						} else {
+							prevVideoId = null;
+							nextVideoId = null;
+						}
+					}
+				} catch {
+					playlist = null;
+					prevVideoId = null;
+					nextVideoId = null;
+				}
+			} else {
+				playlist = null;
+				prevVideoId = null;
+				nextVideoId = null;
+			}
+
 			try {
 				await loadMetadataOptions();
 			} catch {
@@ -317,6 +383,12 @@
 		} finally {
 			loading = false;
 		}
+	}
+
+	$effect(() => {
+		const currentId = id;
+		const currentPlaylistId = playlistId;
+		untrack(() => loadVideoAndPlaylist(currentId, currentPlaylistId));
 	});
 
 	onDestroy(() => {
@@ -356,19 +428,21 @@
 	<title>Player</title>
 </svelte:head>
 
-<!-- svelte-ignore a11y_no_static_element_interactions -->
 <div 
 	bind:this={containerEl}
+	role="presentation"
 	class="fixed inset-0 bg-black z-50 flex flex-col items-center justify-center"
 	onmousemove={resetTimer}
 	onmouseleave={() => { if (!paused) showControls = false; }}
 >
 	<a 
-		href="/" 
+		href={playlistId ? `/playlists/${playlistId}` : "/"} 
 		class="absolute top-6 left-6 z-50 flex items-center gap-4 text-white/50 hover:text-white uppercase tracking-widest text-xs font-bold px-4 py-2 border border-white/20 hover:border-white/50 transition-all bg-black/50 backdrop-blur {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'} duration-300"
 	>
 		<span>&larr; Back</span>
-		<span class="text-white/70 max-w-xs truncate">{video?.title || 'Unknown title'}</span>
+		<span class="text-white/70 max-w-xs truncate">
+			{playlist ? `Playlist: ${playlist.name}` : (video?.title || 'Unknown title')}
+		</span>
 	</a>
 
 	<button
@@ -394,8 +468,6 @@
 		</div>
 	{/if}
 	
-	<!-- svelte-ignore a11y_click_events_have_key_events -->
-	<!-- svelte-ignore a11y_media_has_caption -->
 	<video
 		bind:this={videoEl}
 		bind:currentTime
@@ -510,7 +582,6 @@
 	</div>
 
 	{#if paused}
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div 
 			class="absolute inset-0 flex items-center justify-center pointer-events-none"
 		>
@@ -529,10 +600,16 @@
 	<div 
 		class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/90 to-transparent pt-12 transition-opacity duration-300 {showControls ? 'opacity-100 pointer-events-auto' : 'opacity-0 pointer-events-none'}"
 	>
-		<!-- svelte-ignore a11y_click_events_have_key_events -->
 		<div 
 			class="w-full h-2 bg-white/20 cursor-pointer group hover:h-3 transition-all relative"
+			role="slider"
+			tabindex="0"
+			aria-label="Seek"
+			aria-valuemin="0"
+			aria-valuemax={Math.round(duration || 0)}
+			aria-valuenow={Math.round(currentTime || 0)}
 			onclick={seek}
+			onkeydown={seekByKeyboard}
 			onmousemove={handleSeekHover}
 			onmouseleave={clearSeekHover}
 		>
@@ -560,21 +637,47 @@
 
 		<div class="flex items-center justify-between px-6 py-4 text-white">
 			<div class="flex items-center gap-6">
+				<div class="flex items-center gap-4">
+					{#if prevVideoId}
+						<a 
+							href={`/player/${prevVideoId}?playlist=${playlistId}`}
+							class="text-white/50 hover:text-white transition-colors focus:outline-none"
+							aria-label="Previous Video"
+						>
+							<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/>
+							</svg>
+						</a>
+					{/if}
+					
 					<button 
 						class="hover:text-gray-300 transition-colors focus:outline-none"
 						aria-label={paused ? 'Play' : 'Pause'}
 						onclick={togglePlay}
 					>
-					{#if paused}
-						<svg class="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M8 5v14l11-7z" />
-						</svg>
-					{:else}
-						<svg class="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
-						</svg>
+						{#if paused}
+							<svg class="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M8 5v14l11-7z" />
+							</svg>
+						{:else}
+							<svg class="w-8 h-8" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M6 19h4V5H6v14zm8-14v14h4V5h-4z" />
+							</svg>
+						{/if}
+					</button>
+
+					{#if nextVideoId}
+						<a 
+							href={`/player/${nextVideoId}?playlist=${playlistId}`}
+							class="text-white/50 hover:text-white transition-colors focus:outline-none"
+							aria-label="Next Video"
+						>
+							<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M6 18l8.5-6L6 6v12zM16 6v12h2V6h-2z"/>
+							</svg>
+						</a>
 					{/if}
-				</button>
+				</div>
 
 				<div class="text-sm font-medium opacity-90 font-mono">
 					{formatTime(currentTime)} / {formatTime(duration)}
