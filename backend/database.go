@@ -44,6 +44,26 @@ CREATE TABLE IF NOT EXISTS settings (
 	value TEXT
 );`
 
+const createPlaylistsTableSQL = `
+CREATE TABLE IF NOT EXISTS playlists (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	name TEXT NOT NULL UNIQUE,
+	description TEXT NOT NULL DEFAULT '',
+	date_created DATETIME DEFAULT CURRENT_TIMESTAMP,
+	date_updated DATETIME DEFAULT CURRENT_TIMESTAMP
+);`
+
+const createPlaylistItemsTableSQL = `
+CREATE TABLE IF NOT EXISTS playlist_items (
+	playlist_id INTEGER NOT NULL,
+	video_title TEXT NOT NULL,
+	position INTEGER NOT NULL DEFAULT 0,
+	PRIMARY KEY (playlist_id, video_title),
+	FOREIGN KEY (playlist_id) REFERENCES playlists(id) ON DELETE CASCADE
+);`
+
+const createPlaylistItemsPlaylistIndexSQL = `CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist_id ON playlist_items(playlist_id, position);`
+
 const mediaPathSettingKey = "media_path"
 const generateThumbnailsSettingKey = "generate_thumbnails"
 const generateScrubberSpritesSettingKey = "generate_scrubber_sprites"
@@ -85,6 +105,10 @@ func (s *Store) Init() error {
 		s.logger.Info("initializing database schema")
 	}
 
+	if _, err := s.db.Exec(`PRAGMA foreign_keys = ON`); err != nil {
+		return fmt.Errorf("enable foreign keys: %w", err)
+	}
+
 	if _, err := s.db.Exec(createVideosTableSQL); err != nil {
 		return fmt.Errorf("create videos table: %w", err)
 	}
@@ -96,6 +120,15 @@ func (s *Store) Init() error {
 	}
 	if _, err := s.db.Exec(createSettingsTableSQL); err != nil {
 		return fmt.Errorf("create settings table: %w", err)
+	}
+	if _, err := s.db.Exec(createPlaylistsTableSQL); err != nil {
+		return fmt.Errorf("create playlists table: %w", err)
+	}
+	if _, err := s.db.Exec(createPlaylistItemsTableSQL); err != nil {
+		return fmt.Errorf("create playlist items table: %w", err)
+	}
+	if _, err := s.db.Exec(createPlaylistItemsPlaylistIndexSQL); err != nil {
+		return fmt.Errorf("create playlist items index: %w", err)
 	}
 	if _, err := s.db.Exec(`DELETE FROM settings WHERE key = 'hard_link_destination'`); err != nil {
 		return fmt.Errorf("remove retired hardlink setting: %w", err)
@@ -299,6 +332,12 @@ func (s *Store) SetGenerationSettings(settings GenerationSettingsRequest) error 
 }
 
 func (s *Store) ClearDatabase() error {
+	if _, err := s.db.Exec(`DROP TABLE IF EXISTS playlist_items`); err != nil {
+		return fmt.Errorf("drop playlist items table: %w", err)
+	}
+	if _, err := s.db.Exec(`DROP TABLE IF EXISTS playlists`); err != nil {
+		return fmt.Errorf("drop playlists table: %w", err)
+	}
 	if _, err := s.db.Exec(`DROP TABLE IF EXISTS videos`); err != nil {
 		return fmt.Errorf("drop videos table: %w", err)
 	}
@@ -632,11 +671,227 @@ func (s *Store) UpdateMetadataCatalog(addTags []string, removeTags []string, add
 	return s.ListMetadataOptions()
 }
 
+func (s *Store) ListPlaylists() ([]PlaylistSummary, error) {
+	if err := s.pruneStalePlaylistItems(); err != nil {
+		return nil, err
+	}
+
+	rows, err := s.db.Query(`
+		SELECT p.id, p.name, p.description, COUNT(vt.title) AS item_count, p.date_created, p.date_updated
+		FROM playlists p
+		LEFT JOIN playlist_items pi ON pi.playlist_id = p.id
+		LEFT JOIN (SELECT DISTINCT title FROM videos) vt ON vt.title = pi.video_title
+		GROUP BY p.id, p.name, p.description, p.date_created, p.date_updated
+		ORDER BY LOWER(p.name), p.id`)
+	if err != nil {
+		return nil, fmt.Errorf("query playlists: %w", err)
+	}
+	defer rows.Close()
+
+	playlists := make([]PlaylistSummary, 0)
+	for rows.Next() {
+		playlist, err := scanPlaylistSummary(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan playlist summary: %w", err)
+		}
+		playlists = append(playlists, playlist)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate playlists: %w", err)
+	}
+
+	return playlists, nil
+}
+
+func (s *Store) GetPlaylistByID(id int64) (Playlist, error) {
+	if err := s.pruneStalePlaylistItemsForPlaylist(id); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return Playlist{}, err
+	}
+
+	var playlist Playlist
+	var dateCreated sql.NullTime
+	var dateUpdated sql.NullTime
+	err := s.db.QueryRow(`
+		SELECT id, name, description, date_created, date_updated
+		FROM playlists
+		WHERE id = ?`, id).Scan(&playlist.ID, &playlist.Name, &playlist.Description, &dateCreated, &dateUpdated)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return Playlist{}, err
+		}
+		return Playlist{}, fmt.Errorf("get playlist by id: %w", err)
+	}
+
+	assignPlaylistTimes(&playlist, dateCreated, dateUpdated)
+	items, err := s.listPlaylistItems(id)
+	if err != nil {
+		return Playlist{}, err
+	}
+	playlist.Items = items
+
+	return playlist, nil
+}
+
+func (s *Store) CreatePlaylist(name string, description string, videoIDs []int64) (Playlist, error) {
+	name = strings.TrimSpace(name)
+	description = strings.TrimSpace(description)
+	if name == "" {
+		return Playlist{}, errors.New("playlist name is required")
+	}
+
+	titles, err := s.getTitlesForVideoIDsOrdered(videoIDs)
+	if err != nil {
+		return Playlist{}, err
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return Playlist{}, fmt.Errorf("begin create playlist: %w", err)
+	}
+
+	result, err := tx.Exec(`INSERT INTO playlists (name, description) VALUES (?, ?)`, name, description)
+	if err != nil {
+		_ = tx.Rollback()
+		return Playlist{}, fmt.Errorf("create playlist: %w", err)
+	}
+
+	playlistID, err := result.LastInsertId()
+	if err != nil {
+		_ = tx.Rollback()
+		return Playlist{}, fmt.Errorf("read created playlist id: %w", err)
+	}
+
+	if err := setPlaylistTitlesTx(tx, playlistID, titles); err != nil {
+		_ = tx.Rollback()
+		return Playlist{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return Playlist{}, fmt.Errorf("commit create playlist: %w", err)
+	}
+
+	return s.GetPlaylistByID(playlistID)
+}
+
+func (s *Store) UpdatePlaylist(id int64, name string, description string) (Playlist, error) {
+	name = strings.TrimSpace(name)
+	description = strings.TrimSpace(description)
+	if name == "" {
+		return Playlist{}, errors.New("playlist name is required")
+	}
+
+	result, err := s.db.Exec(`
+		UPDATE playlists
+		SET name = ?, description = ?, date_updated = CURRENT_TIMESTAMP
+		WHERE id = ?`, name, description, id)
+	if err != nil {
+		return Playlist{}, fmt.Errorf("update playlist: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return Playlist{}, fmt.Errorf("read updated playlist rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return Playlist{}, sql.ErrNoRows
+	}
+
+	return s.GetPlaylistByID(id)
+}
+
+func (s *Store) DeletePlaylist(id int64) error {
+	result, err := s.db.Exec(`DELETE FROM playlists WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete playlist: %w", err)
+	}
+
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("read deleted playlist rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+
+	return nil
+}
+
+func (s *Store) AddPlaylistItems(id int64, videoIDs []int64) (Playlist, error) {
+	titlesToAdd, err := s.getTitlesForVideoIDsOrdered(videoIDs)
+	if err != nil {
+		return Playlist{}, err
+	}
+
+	existingTitles, err := s.getPlaylistTitles(id)
+	if err != nil {
+		return Playlist{}, err
+	}
+
+	combined := append(append([]string(nil), existingTitles...), titlesToAdd...)
+	combined = uniqueStringsPreserveOrder(combined)
+	if err := s.replacePlaylistTitles(id, combined); err != nil {
+		return Playlist{}, err
+	}
+
+	return s.GetPlaylistByID(id)
+}
+
+func (s *Store) ReplacePlaylistItems(id int64, videoIDs []int64) (Playlist, error) {
+	titles, err := s.getTitlesForVideoIDsOrdered(videoIDs)
+	if err != nil {
+		return Playlist{}, err
+	}
+
+	if err := s.replacePlaylistTitles(id, titles); err != nil {
+		return Playlist{}, err
+	}
+
+	return s.GetPlaylistByID(id)
+}
+
+func (s *Store) RemovePlaylistItem(id int64, videoID int64) (Playlist, error) {
+	title, err := s.getTitleForVideoID(videoID)
+	if err != nil {
+		return Playlist{}, err
+	}
+
+	existingTitles, err := s.getPlaylistTitles(id)
+	if err != nil {
+		return Playlist{}, err
+	}
+
+	filtered := make([]string, 0, len(existingTitles))
+	for _, existingTitle := range existingTitles {
+		if existingTitle == title {
+			continue
+		}
+		filtered = append(filtered, existingTitle)
+	}
+
+	if len(filtered) == len(existingTitles) {
+		return Playlist{}, sql.ErrNoRows
+	}
+
+	if err := s.replacePlaylistTitles(id, filtered); err != nil {
+		return Playlist{}, err
+	}
+
+	return s.GetPlaylistByID(id)
+}
+
 func (s *Store) IsUniqueFilenameError(err error) bool {
 	if err == nil {
 		return false
 	}
 	return strings.Contains(err.Error(), "UNIQUE constraint failed: videos.filename")
+}
+
+func (s *Store) IsUniquePlaylistNameError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "UNIQUE constraint failed: playlists.name")
 }
 
 func scanVideoSummary(scanner interface{ Scan(dest ...any) error }) (Video, error) {
@@ -683,6 +938,19 @@ func scanVideoDetail(scanner interface{ Scan(dest ...any) error }) (Video, error
 	return video, nil
 }
 
+func scanPlaylistSummary(scanner interface{ Scan(dest ...any) error }) (PlaylistSummary, error) {
+	var playlist PlaylistSummary
+	var dateCreated sql.NullTime
+	var dateUpdated sql.NullTime
+
+	if err := scanner.Scan(&playlist.ID, &playlist.Name, &playlist.Description, &playlist.ItemCount, &dateCreated, &dateUpdated); err != nil {
+		return PlaylistSummary{}, err
+	}
+
+	assignPlaylistSummaryTimes(&playlist, dateCreated, dateUpdated)
+	return playlist, nil
+}
+
 func assignVideoTimes(video *Video, dateAdded, dateScanned sql.NullTime) {
 	if dateAdded.Valid {
 		t := dateAdded.Time.UTC()
@@ -691,6 +959,28 @@ func assignVideoTimes(video *Video, dateAdded, dateScanned sql.NullTime) {
 	if dateScanned.Valid {
 		t := dateScanned.Time.UTC()
 		video.DateScanned = &t
+	}
+}
+
+func assignPlaylistTimes(playlist *Playlist, dateCreated, dateUpdated sql.NullTime) {
+	if dateCreated.Valid {
+		t := dateCreated.Time.UTC()
+		playlist.DateCreated = &t
+	}
+	if dateUpdated.Valid {
+		t := dateUpdated.Time.UTC()
+		playlist.DateUpdated = &t
+	}
+}
+
+func assignPlaylistSummaryTimes(playlist *PlaylistSummary, dateCreated, dateUpdated sql.NullTime) {
+	if dateCreated.Valid {
+		t := dateCreated.Time.UTC()
+		playlist.DateCreated = &t
+	}
+	if dateUpdated.Valid {
+		t := dateUpdated.Time.UTC()
+		playlist.DateUpdated = &t
 	}
 }
 
@@ -1267,4 +1557,201 @@ func (s *Store) GetVideoGroupByTitle(title string) (VideoGroup, error) {
 	}
 
 	return s.GetVideoGroupByID(id)
+}
+
+func (s *Store) listPlaylistItems(playlistID int64) ([]VideoGroup, error) {
+	titles, err := s.getPlaylistTitles(playlistID)
+	if err != nil {
+		return nil, err
+	}
+
+	items := make([]VideoGroup, 0, len(titles))
+	for _, title := range titles {
+		group, err := s.GetVideoGroupByTitle(title)
+		if err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				continue
+			}
+			return nil, fmt.Errorf("load playlist item by title: %w", err)
+		}
+		items = append(items, group)
+	}
+
+	return items, nil
+}
+
+func (s *Store) getPlaylistTitles(playlistID int64) ([]string, error) {
+	if _, err := s.GetPlaylistByIDMeta(playlistID); err != nil {
+		return nil, err
+	}
+
+	rows, err := s.db.Query(`
+		SELECT video_title
+		FROM playlist_items
+		WHERE playlist_id = ?
+		ORDER BY position, video_title`, playlistID)
+	if err != nil {
+		return nil, fmt.Errorf("query playlist titles: %w", err)
+	}
+	defer rows.Close()
+
+	titles := make([]string, 0)
+	for rows.Next() {
+		var title string
+		if err := rows.Scan(&title); err != nil {
+			return nil, fmt.Errorf("scan playlist title: %w", err)
+		}
+		titles = append(titles, title)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate playlist titles: %w", err)
+	}
+
+	return titles, nil
+}
+
+func (s *Store) GetPlaylistByIDMeta(id int64) (PlaylistSummary, error) {
+	if err := s.pruneStalePlaylistItemsForPlaylist(id); err != nil && !errors.Is(err, sql.ErrNoRows) {
+		return PlaylistSummary{}, err
+	}
+
+	return s.GetPlaylistByIDMetaWithoutPrune(id)
+}
+
+func (s *Store) getTitleForVideoID(id int64) (string, error) {
+	var title string
+	if err := s.db.QueryRow(`SELECT title FROM videos WHERE id = ?`, id).Scan(&title); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return "", err
+		}
+		return "", fmt.Errorf("get title for video id: %w", err)
+	}
+	return title, nil
+}
+
+func (s *Store) getTitlesForVideoIDsOrdered(ids []int64) ([]string, error) {
+	uniqueIDs := uniqueInt64s(ids)
+	titles := make([]string, 0, len(uniqueIDs))
+	for _, id := range uniqueIDs {
+		title, err := s.getTitleForVideoID(id)
+		if err != nil {
+			return nil, err
+		}
+		titles = append(titles, title)
+	}
+	return uniqueStringsPreserveOrder(titles), nil
+}
+
+func (s *Store) replacePlaylistTitles(id int64, titles []string) error {
+	if _, err := s.GetPlaylistByIDMeta(id); err != nil {
+		return err
+	}
+
+	tx, err := s.db.Begin()
+	if err != nil {
+		return fmt.Errorf("begin replace playlist items: %w", err)
+	}
+
+	if err := setPlaylistTitlesTx(tx, id, titles); err != nil {
+		_ = tx.Rollback()
+		return err
+	}
+
+	if _, err := tx.Exec(`UPDATE playlists SET date_updated = CURRENT_TIMESTAMP WHERE id = ?`, id); err != nil {
+		_ = tx.Rollback()
+		return fmt.Errorf("touch playlist updated time: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit replace playlist items: %w", err)
+	}
+
+	return nil
+}
+
+func setPlaylistTitlesTx(tx *sql.Tx, playlistID int64, titles []string) error {
+	titles = uniqueStringsPreserveOrder(titles)
+	if _, err := tx.Exec(`DELETE FROM playlist_items WHERE playlist_id = ?`, playlistID); err != nil {
+		return fmt.Errorf("clear playlist items: %w", err)
+	}
+
+	for idx, title := range titles {
+		if _, err := tx.Exec(`INSERT INTO playlist_items (playlist_id, video_title, position) VALUES (?, ?, ?)`, playlistID, title, idx); err != nil {
+			return fmt.Errorf("insert playlist item: %w", err)
+		}
+	}
+
+	return nil
+}
+
+func uniqueStringsPreserveOrder(values []string) []string {
+	seen := make(map[string]struct{}, len(values))
+	unique := make([]string, 0, len(values))
+	for _, value := range values {
+		trimmed := strings.TrimSpace(value)
+		if trimmed == "" {
+			continue
+		}
+		key := strings.ToLower(trimmed)
+		if _, exists := seen[key]; exists {
+			continue
+		}
+		seen[key] = struct{}{}
+		unique = append(unique, trimmed)
+	}
+	return unique
+}
+
+func (s *Store) pruneStalePlaylistItems() error {
+	if _, err := s.db.Exec(`
+		DELETE FROM playlist_items
+		WHERE NOT EXISTS (
+			SELECT 1
+			FROM videos
+			WHERE videos.title = playlist_items.video_title
+		)`); err != nil {
+		return fmt.Errorf("prune stale playlist items: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) pruneStalePlaylistItemsForPlaylist(playlistID int64) error {
+	if _, err := s.GetPlaylistByIDMetaWithoutPrune(playlistID); err != nil {
+		return err
+	}
+
+	if _, err := s.db.Exec(`
+		DELETE FROM playlist_items
+		WHERE playlist_id = ?
+		  AND NOT EXISTS (
+			SELECT 1
+			FROM videos
+			WHERE videos.title = playlist_items.video_title
+		)`, playlistID); err != nil {
+		return fmt.Errorf("prune stale playlist items for playlist: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Store) GetPlaylistByIDMetaWithoutPrune(id int64) (PlaylistSummary, error) {
+	var playlist PlaylistSummary
+	var dateCreated sql.NullTime
+	var dateUpdated sql.NullTime
+	err := s.db.QueryRow(`
+		SELECT p.id, p.name, p.description, COUNT(vt.title), p.date_created, p.date_updated
+		FROM playlists p
+		LEFT JOIN playlist_items pi ON pi.playlist_id = p.id
+		LEFT JOIN (SELECT DISTINCT title FROM videos) vt ON vt.title = pi.video_title
+		WHERE p.id = ?
+		GROUP BY p.id, p.name, p.description, p.date_created, p.date_updated`, id).Scan(&playlist.ID, &playlist.Name, &playlist.Description, &playlist.ItemCount, &dateCreated, &dateUpdated)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return PlaylistSummary{}, err
+		}
+		return PlaylistSummary{}, fmt.Errorf("get playlist meta: %w", err)
+	}
+	assignPlaylistSummaryTimes(&playlist, dateCreated, dateUpdated)
+	return playlist, nil
 }

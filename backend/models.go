@@ -161,6 +161,39 @@ type PreviewGenerationStatus struct {
 	CompletedAt             *time.Time `json:"completed_at,omitempty"`
 }
 
+type PlaylistSummary struct {
+	ID          int64      `json:"id"`
+	Name        string     `json:"name"`
+	Description string     `json:"description,omitempty"`
+	ItemCount   int        `json:"item_count"`
+	DateCreated *time.Time `json:"date_created,omitempty"`
+	DateUpdated *time.Time `json:"date_updated,omitempty"`
+}
+
+type Playlist struct {
+	ID          int64        `json:"id"`
+	Name        string       `json:"name"`
+	Description string       `json:"description,omitempty"`
+	Items       []VideoGroup `json:"items"`
+	DateCreated *time.Time   `json:"date_created,omitempty"`
+	DateUpdated *time.Time   `json:"date_updated,omitempty"`
+}
+
+type PlaylistCreateRequest struct {
+	Name        string  `json:"name"`
+	Description string  `json:"description"`
+	VideoIDs    []int64 `json:"video_ids"`
+}
+
+type PlaylistUpdateRequest struct {
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+type PlaylistItemsRequest struct {
+	VideoIDs []int64 `json:"video_ids"`
+}
+
 type errorResponse struct {
 	Error string `json:"error"`
 }
