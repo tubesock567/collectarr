@@ -1465,6 +1465,7 @@ func marshalTorrentIndexers(indexers []TorrentIndexer) (string, error) {
 
 func sanitizeTorrentIndexer(indexer TorrentIndexer) TorrentIndexer {
 	indexer.ID = strings.TrimSpace(indexer.ID)
+	indexer.Label = strings.TrimSpace(indexer.Label)
 	indexer.TorznabURL = strings.TrimSpace(indexer.TorznabURL)
 	indexer.APIKey = strings.TrimSpace(indexer.APIKey)
 	indexer.Tracker = strings.TrimSpace(indexer.Tracker)

@@ -88,8 +88,14 @@ func (api *API) handleCreateTorrentIndexer(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	label := strings.TrimSpace(req.Label)
+	if label == "" {
+		label = tracker
+	}
+
 	indexers, err := api.store.AddTorrentIndexer(TorrentIndexer{
 		ID:         newTorrentIndexerID(),
+		Label:      label,
 		TorznabURL: torznabURL,
 		APIKey:     apiKey,
 		Tracker:    tracker,
@@ -491,6 +497,7 @@ func torrentIndexerResponses(indexers []TorrentIndexer) []TorrentIndexerResponse
 	for _, indexer := range indexers {
 		responses = append(responses, TorrentIndexerResponse{
 			ID:           indexer.ID,
+			Label:        indexer.Label,
 			TorznabURL:   indexer.TorznabURL,
 			Tracker:      indexer.Tracker,
 			MaskedAPIKey: maskAPIKey(indexer.APIKey),

@@ -140,18 +140,21 @@ type SettingsMetadataUpdateRequest struct {
 
 type TorrentIndexer struct {
 	ID         string `json:"id"`
+	Label      string `json:"label"`
 	TorznabURL string `json:"torznab_url"`
 	APIKey     string `json:"api_key"`
 	Tracker    string `json:"tracker"`
 }
 
 type TorrentIndexerCreateRequest struct {
+	Label      string `json:"label"`
 	TorznabURL string `json:"torznab_url"`
 	APIKey     string `json:"api_key"`
 }
 
 type TorrentIndexerResponse struct {
 	ID           string `json:"id"`
+	Label        string `json:"label"`
 	TorznabURL   string `json:"torznab_url"`
 	Tracker      string `json:"tracker"`
 	MaskedAPIKey string `json:"masked_api_key"`
