@@ -34,14 +34,15 @@ type torznabChannel struct {
 }
 
 type torznabItem struct {
-	Title     string           `xml:"title"`
-	Link      string           `xml:"link"`
-	GUID      string           `xml:"guid"`
-	Comments  string           `xml:"comments"`
-	Indexer   string           `xml:"jackettindexer"`
-	Size      int64            `xml:"size"`
-	Enclosure torznabEnclosure `xml:"enclosure"`
-	Attrs     []torznabAttr    `xml:"attr"`
+	Title       string           `xml:"title"`
+	Link        string           `xml:"link"`
+	GUID        string           `xml:"guid"`
+	Comments    string           `xml:"comments"`
+	Description string           `xml:"description"`
+	Indexer     string           `xml:"jackettindexer"`
+	Size        int64            `xml:"size"`
+	Enclosure   torznabEnclosure `xml:"enclosure"`
+	Attrs       []torznabAttr    `xml:"attr"`
 }
 
 type torznabEnclosure struct {
@@ -304,9 +305,10 @@ func parseTorznabResults(indexer TorrentIndexer, body []byte) ([]TorrentSearchRe
 		}
 
 		detailsURL := firstNonEmptyURL(
-			pickURLByScheme(item.GUID, "http", "https"),
 			pickURLByScheme(item.Comments, "http", "https"),
-			pickURLByScheme(item.Link, "http", "https"),
+			pickNonMagnetURL(item.Description),
+			pickNonMagnetURL(item.GUID),
+			pickNonMagnetURL(item.Link),
 		)
 		downloadURL := firstNonEmptyURL(
 			firstAttrValue(attrValues, "magneturl"),
@@ -451,6 +453,24 @@ func pickURLByScheme(raw string, schemes ...string) string {
 		if strings.EqualFold(parsed.Scheme, scheme) {
 			return trimmed
 		}
+	}
+	return ""
+}
+
+func pickNonMagnetURL(raw string) string {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" {
+		return ""
+	}
+	parsed, err := url.Parse(trimmed)
+	if err != nil {
+		return ""
+	}
+	if strings.EqualFold(parsed.Scheme, "magnet") {
+		return ""
+	}
+	if parsed.Scheme == "http" || parsed.Scheme == "https" {
+		return trimmed
 	}
 	return ""
 }

@@ -338,8 +338,13 @@
 	}
 
 	function getSortIcon(field) {
-		if (sortBy !== field) return '';
-		return sortOrder === 'asc' ? ' ^' : ' v';
+		if (sortBy !== field) {
+			return '<svg class="inline h-3 w-3 ml-1 text-neutral-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>';
+		}
+		if (sortOrder === 'asc') {
+			return '<svg class="inline h-3 w-3 ml-1 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 15l7-7 7 7"/></svg>';
+		}
+		return '<svg class="inline h-3 w-3 ml-1 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>';
 	}
 </script>
 
@@ -425,20 +430,20 @@
 						<table class="min-w-full divide-y divide-neutral-800 text-left text-sm">
 							<thead class="bg-neutral-950 text-[11px] uppercase tracking-[0.25em] text-neutral-400">
 								<tr>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none" onclick={() => handleSort('title')}>
-										Title {getSortIcon('title')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('title')}>
+										<span>Title</span>{@html getSortIcon('title')}
 									</th>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none" onclick={() => handleSort('tracker')}>
-										Tracker {getSortIcon('tracker')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('tracker')}>
+										<span>Tracker</span>{@html getSortIcon('tracker')}
 									</th>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none" onclick={() => handleSort('size')}>
-										Size {getSortIcon('size')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('size')}>
+										<span>Size</span>{@html getSortIcon('size')}
 									</th>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none" onclick={() => handleSort('seeders')}>
-										Seeders {getSortIcon('seeders')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('seeders')}>
+										<span>Seeders</span>{@html getSortIcon('seeders')}
 									</th>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none" onclick={() => handleSort('leechers')}>
-										Leechers {getSortIcon('leechers')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('leechers')}>
+										<span>Leechers</span>{@html getSortIcon('leechers')}
 									</th>
 									<th class="px-4 py-3"></th>
 								</tr>
