@@ -109,8 +109,8 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 			switch {
 			case err == nil:
 				if err := s.store.UpdateVideoMetadata(existing.ID, video); err != nil {
-					if s.store.IsUniqueFilenameError(err) {
-						s.logger.Warn("skipping file due to filename conflict", "path", video.Path, "filename", video.Filename)
+					if s.store.IsUniquePathError(err) {
+						s.logger.Warn("skipping file due to path conflict", "path", video.Path)
 						report.Skipped++
 						continue
 					}
@@ -123,8 +123,8 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 				}
 			case errors.Is(err, sql.ErrNoRows):
 				if err := s.store.InsertVideo(video); err != nil {
-					if s.store.IsUniqueFilenameError(err) {
-						s.logger.Warn("skipping file due to filename conflict", "path", video.Path, "filename", video.Filename)
+					if s.store.IsUniquePathError(err) {
+						s.logger.Warn("skipping file due to path conflict", "path", video.Path)
 						report.Skipped++
 						continue
 					}

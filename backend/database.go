@@ -19,8 +19,8 @@ const createVideosTableSQL = `
 CREATE TABLE IF NOT EXISTS videos (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	title TEXT NOT NULL,
-	filename TEXT NOT NULL UNIQUE,
-	path TEXT NOT NULL,
+	filename TEXT NOT NULL,
+	path TEXT NOT NULL UNIQUE,
 	quality TEXT,
 	duration INTEGER,
 	tags_json TEXT NOT NULL DEFAULT '[]',
@@ -164,6 +164,10 @@ func (s *Store) Init() error {
 	}
 
 	if err := s.migrateUserForcePasswordChange(); err != nil {
+		return err
+	}
+
+	if err := s.migrateVideosUniqueConstraint(); err != nil {
 		return err
 	}
 
@@ -1036,11 +1040,11 @@ func (s *Store) RemovePlaylistItem(id int64, videoID int64) (Playlist, error) {
 	return s.GetPlaylistByID(id)
 }
 
-func (s *Store) IsUniqueFilenameError(err error) bool {
+func (s *Store) IsUniquePathError(err error) bool {
 	if err == nil {
 		return false
 	}
-	return strings.Contains(err.Error(), "UNIQUE constraint failed: videos.filename")
+	return strings.Contains(err.Error(), "UNIQUE constraint failed: videos.path")
 }
 
 func (s *Store) IsUniquePlaylistNameError(err error) bool {
@@ -2026,6 +2030,56 @@ func (s *Store) migrateUserForcePasswordChange() error {
 			s.logger.Info("migrated users table", "added_column", "force_password_change")
 		}
 	}
+	return nil
+}
+
+func (s *Store) migrateVideosUniqueConstraint() error {
+	var hasFilenameUnique int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'sqlite_autoindex_videos_1'`).Scan(&hasFilenameUnique)
+	if err != nil {
+		return fmt.Errorf("check videos unique constraint: %w", err)
+	}
+
+	if hasFilenameUnique > 0 {
+		tx, err := s.db.Begin()
+		if err != nil {
+			return fmt.Errorf("begin videos migration: %w", err)
+		}
+		defer tx.Rollback()
+
+		if _, err := tx.Exec(`ALTER TABLE videos RENAME TO videos_old`); err != nil {
+			return fmt.Errorf("rename videos table: %w", err)
+		}
+
+		if _, err := tx.Exec(createVideosTableSQL); err != nil {
+			return fmt.Errorf("create new videos table: %w", err)
+		}
+
+		if _, err := tx.Exec(`
+			INSERT INTO videos (id, title, filename, path, quality, duration, tags_json, actors_json, date_added, date_scanned)
+			SELECT id, title, filename, path, quality, duration, tags_json, actors_json, date_added, date_scanned
+			FROM videos_old
+		`); err != nil {
+			return fmt.Errorf("copy videos data: %w", err)
+		}
+
+		if _, err := tx.Exec(`DROP TABLE videos_old`); err != nil {
+			return fmt.Errorf("drop old videos table: %w", err)
+		}
+
+		if _, err := tx.Exec(createVideosTitleIndexSQL); err != nil {
+			return fmt.Errorf("recreate videos title index: %w", err)
+		}
+
+		if err := tx.Commit(); err != nil {
+			return fmt.Errorf("commit videos migration: %w", err)
+		}
+
+		if s.logger != nil {
+			s.logger.Info("migrated videos table", "changed", "UNIQUE from filename to path")
+		}
+	}
+
 	return nil
 }
 
