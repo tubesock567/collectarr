@@ -9,6 +9,7 @@
 	let deletingIndexerId = $state('');
 	let torznabURL = $state('');
 	let apiKey = $state('');
+	let showAddIndexerPopup = $state(false);
 
 	let query = $state('');
 	let searching = $state(false);
@@ -77,6 +78,7 @@
 			indexers = await response.json();
 			torznabURL = '';
 			apiKey = '';
+			showAddIndexerPopup = false;
 			indexerMessage = 'Torrent indexer added.';
 		} catch (error) {
 			indexerMessage = `Error: ${error.message}`;
@@ -160,10 +162,6 @@
 	function maskAPIKey(value) {
 		return value || 'Not set';
 	}
-
-	function getDownloadLabel(value) {
-		return value?.startsWith('magnet:') ? 'Magnet' : 'Download';
-	}
 </script>
 
 <svelte:head>
@@ -173,33 +171,20 @@
 <div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
 	<div class="mb-8 border-b border-neutral-800 pb-4">
 		<h1 class="text-2xl font-bold uppercase tracking-widest">Torrent Search</h1>
-		<p class="mt-2 max-w-3xl text-sm text-neutral-500">Add Jackett Torznab feeds, then search across configured indexers. Results show tracker, size, seeders, leechers, freeleech, details, and magnet/download link.</p>
+		<p class="mt-2 max-w-3xl text-sm text-neutral-500">Add Jackett Torznab feeds, then search across configured indexers. Results show tracker, size, seeders, leechers, freeleech, and download link.</p>
 	</div>
 
 	<div class="grid gap-8 xl:grid-cols-[20rem_minmax(0,1fr)]">
 		<section class="border border-neutral-800 p-6">
-			<div>
-				<h2 class="text-sm font-semibold uppercase tracking-widest text-white">Jackett Indexers</h2>
-				<p class="mt-1 text-xs text-neutral-500">Paste Torznab feed link from Jackett plus API key. Search always overrides API key, query, and Torznab action.</p>
-			</div>
-
-			<div class="mt-6 grid gap-4">
-				<label class="grid gap-2">
-					<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Torznab Link</span>
-					<input bind:value={torznabURL} type="url" placeholder="https://jackett.local/api/v2.0/indexers/.../results/torznab/api?t=search" class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500" />
-				</label>
-
-				<label class="grid gap-2">
-					<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Jackett API Key</span>
-					<input bind:value={apiKey} type="password" placeholder="Paste Jackett API key" class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500" />
-				</label>
-
-				<button onclick={addIndexer} disabled={savingIndexer} class="bg-white px-6 py-3 text-xs font-bold uppercase tracking-widest text-black transition-colors hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500">
-					{#if savingIndexer}
-						Adding...
-					{:else}
-						Add Indexer
-					{/if}
+			<div class="flex items-center justify-between">
+				<div>
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white">Jackett Indexers</h2>
+					<p class="mt-1 text-xs text-neutral-500">Configured indexers: {indexers.length}</p>
+				</div>
+				<button onclick={() => showAddIndexerPopup = true} class="flex h-8 w-8 items-center justify-center border border-neutral-700 bg-neutral-900 text-white transition-colors hover:border-neutral-500 hover:bg-neutral-800" aria-label="Add indexer">
+					<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+					</svg>
 				</button>
 			</div>
 
@@ -207,14 +192,13 @@
 				<p class="mt-4 text-xs tracking-wide {indexerMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'}">{indexerMessage}</p>
 			{/if}
 
-			<div class="mt-6 border-t border-neutral-800 pt-6">
-				<p class="mb-3 text-xs uppercase tracking-[0.25em] text-neutral-400">Configured Indexers</p>
+			<div class="mt-6">
 				{#if indexersLoading}
 					<div class="flex min-h-32 items-center justify-center border border-neutral-800 bg-black">
 						<span class="loading loading-spinner loading-md text-white"></span>
 					</div>
 				{:else if indexers.length === 0}
-					<div class="border border-neutral-800 bg-black px-4 py-5 text-sm text-neutral-500">No Jackett indexers saved yet.</div>
+					<div class="border border-neutral-800 bg-black px-4 py-5 text-sm text-neutral-500">No Jackett indexers saved yet. Click + to add one.</div>
 				{:else}
 					<div class="space-y-3">
 						{#each indexers as indexer (indexer.id)}
@@ -303,9 +287,7 @@
 									<th class="px-4 py-3">Size</th>
 									<th class="px-4 py-3">Seeders</th>
 									<th class="px-4 py-3">Leechers</th>
-									<th class="px-4 py-3">Freeleech</th>
-									<th class="px-4 py-3">Details</th>
-									<th class="px-4 py-3">Link</th>
+									<th class="px-4 py-3"></th>
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-neutral-900">
@@ -313,10 +295,16 @@
 									<tr class="align-top hover:bg-neutral-950/70">
 										<td class="max-w-xl px-4 py-4 text-white">
 											<div class="space-y-2">
-												<p class="font-medium leading-6">{result.title || 'Untitled torrent'}</p>
-												{#if result.url}
-													<p class="break-all text-xs text-neutral-500">{result.url}</p>
-												{/if}
+												<div class="flex items-center gap-2">
+													{#if result.url}
+														<a href={result.url} target="_blank" rel="noreferrer" class="font-medium leading-6 transition-colors hover:text-neutral-300">{result.title || 'Untitled torrent'}</a>
+													{:else}
+														<p class="font-medium leading-6">{result.title || 'Untitled torrent'}</p>
+													{/if}
+													{#if result.freeleech}
+														<span class="inline-flex border border-emerald-800 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-emerald-300">Freeleech</span>
+													{/if}
+												</div>
 											</div>
 										</td>
 										<td class="px-4 py-4 text-neutral-300">{result.tracker || 'Unknown'}</td>
@@ -324,20 +312,12 @@
 										<td class="px-4 py-4 text-neutral-300">{result.seeders ?? 0}</td>
 										<td class="px-4 py-4 text-neutral-300">{result.leechers ?? 0}</td>
 										<td class="px-4 py-4">
-											<span class="inline-flex border px-2 py-1 text-[11px] uppercase tracking-[0.25em] {result.freeleech ? 'border-emerald-800 text-emerald-300' : 'border-neutral-800 text-neutral-500'}">
-												{result.freeleech ? 'Yes' : 'No'}
-											</span>
-										</td>
-										<td class="px-4 py-4">
-											{#if result.url}
-												<a href={result.url} target="_blank" rel="noreferrer" class="text-xs font-semibold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:text-white">Open</a>
-											{:else}
-												<span class="text-xs uppercase tracking-[0.25em] text-neutral-600">N/A</span>
-											{/if}
-										</td>
-										<td class="px-4 py-4">
 											{#if result.download_url}
-												<a href={result.download_url} target="_blank" rel="noreferrer" class="text-xs font-semibold uppercase tracking-[0.25em] text-white transition-colors hover:text-neutral-300">{getDownloadLabel(result.download_url)}</a>
+												<a href={result.download_url} download class="inline-flex items-center justify-center text-white transition-colors hover:text-neutral-300" aria-label="Download">
+													<svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+														<path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+													</svg>
+												</a>
 											{:else}
 												<span class="text-xs uppercase tracking-[0.25em] text-neutral-600">N/A</span>
 											{/if}
@@ -352,3 +332,38 @@
 		</section>
 	</div>
 </div>
+
+{#if showAddIndexerPopup}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onclick={() => showAddIndexerPopup = false}>
+		<div class="w-full max-w-md border border-neutral-800 bg-black p-6" onclick={(e) => e.stopPropagation()}>
+			<div class="mb-6 flex items-center justify-between">
+				<h3 class="text-sm font-semibold uppercase tracking-widest text-white">Add Jackett Indexer</h3>
+				<button onclick={() => showAddIndexerPopup = false} class="text-neutral-500 transition-colors hover:text-white" aria-label="Close">
+					<svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+						<path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+					</svg>
+				</button>
+			</div>
+
+			<div class="grid gap-4">
+				<label class="grid gap-2">
+					<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Torznab Link</span>
+					<input bind:value={torznabURL} type="url" placeholder="https://jackett.local/api/v2.0/indexers/.../results/torznab/api?t=search" class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500" />
+				</label>
+
+				<label class="grid gap-2">
+					<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Jackett API Key</span>
+					<input bind:value={apiKey} type="password" placeholder="Paste Jackett API key" class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500" />
+				</label>
+
+				<button onclick={addIndexer} disabled={savingIndexer} class="bg-white px-6 py-3 text-xs font-bold uppercase tracking-widest text-black transition-colors hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500">
+					{#if savingIndexer}
+						Adding...
+					{:else}
+						Add Indexer
+					{/if}
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
