@@ -346,21 +346,12 @@
 		const date = new Date(dateStr);
 		const now = new Date();
 		const diffMs = now - date;
-		const diffSec = Math.floor(diffMs / 1000);
-		const diffMin = Math.floor(diffSec / 60);
-		const diffHour = Math.floor(diffMin / 60);
-		const diffDay = Math.floor(diffHour / 24);
-		const diffWeek = Math.floor(diffDay / 7);
-		const diffMonth = Math.floor(diffDay / 30);
+		const diffDay = Math.floor(diffMs / (1000 * 60 * 60 * 24));
 		const diffYear = Math.floor(diffDay / 365);
 
-		if (diffSec < 60) return 'Just now';
-		if (diffMin < 60) return `${diffMin}m ago`;
-		if (diffHour < 24) return `${diffHour}h ago`;
-		if (diffDay < 7) return `${diffDay}d ago`;
-		if (diffWeek < 4) return `${diffWeek}w ago`;
-		if (diffMonth < 12) return `${diffMonth}mo ago`;
-		return `${diffYear}y ago`;
+		if (diffDay < 1) return '< 1d';
+		if (diffYear < 1) return `${diffDay}d`;
+		return `${diffYear}y`;
 	}
 
 	function getSortIcon(field) {
@@ -456,23 +447,23 @@
 						<table class="min-w-full divide-y divide-neutral-800 text-left text-sm">
 							<thead class="bg-neutral-950 text-[11px] uppercase tracking-[0.25em] text-neutral-400">
 								<tr>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('title')}>
-										<span>Title</span>{@html getSortIcon('title')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleSort('title')}>
+										Title {@html getSortIcon('title')}
 									</th>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('tracker')}>
-										<span>Tracker</span>{@html getSortIcon('tracker')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleSort('tracker')}>
+										Tracker {@html getSortIcon('tracker')}
 									</th>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('size')}>
-										<span>Size</span>{@html getSortIcon('size')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleSort('size')}>
+										Size {@html getSortIcon('size')}
 									</th>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('seeders')}>
-										<span>Seeders</span>{@html getSortIcon('seeders')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleSort('seeders')}>
+										Seeders {@html getSortIcon('seeders')}
 									</th>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('leechers')}>
-										<span>Leechers</span>{@html getSortIcon('leechers')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleSort('leechers')}>
+										Leechers {@html getSortIcon('leechers')}
 									</th>
-									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('published')}>
-										<span>Age</span>{@html getSortIcon('published')}
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleSort('published')}>
+										Age {@html getSortIcon('published')}
 									</th>
 									<th class="px-4 py-3"></th>
 								</tr>
