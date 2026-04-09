@@ -560,7 +560,7 @@
 						bind:this={searchInputRef}
 						bind:value={query} 
 						type="search" 
-						placeholder="Search torrents... (press / to focus)" 
+						placeholder="Search torrents..." 
 						class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500" 
 					/>
 					
@@ -578,7 +578,7 @@
 							<input bind:value={maxSize} type="number" min="0" step="0.1" placeholder="e.g., 10" class="w-full border border-neutral-800 bg-black px-3 py-2 text-sm outline-none focus:border-neutral-500" />
 						</label>
 						<div class="flex items-end">
-							<button type="submit" disabled={searching} class="w-full bg-white px-6 py-2 text-xs font-bold uppercase tracking-widest text-black transition-colors hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500">
+							<button type="submit" disabled={searching} class="w-full bg-white px-6 py-3 text-xs font-bold uppercase tracking-widest text-black transition-colors hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500">
 								{#if searching}
 									Searching...
 								{:else}
@@ -863,7 +863,6 @@
 								<th class="px-4 py-3">Title</th>
 								<th class="px-4 py-3">Tracker</th>
 								<th class="px-4 py-3">Size</th>
-								<th class="px-4 py-3">Status</th>
 								<th class="px-4 py-3">Downloaded</th>
 								<th class="px-4 py-3"></th>
 							</tr>
@@ -885,7 +884,6 @@
 									</td>
 									<td class="px-4 py-4 text-neutral-300">{item.tracker || 'Unknown'}</td>
 									<td class="px-4 py-4 text-neutral-300">{formatBytes(item.size)}</td>
-									<td class="px-4 py-4 {getStatusColor(item.status)}">{getStatusLabel(item.status)}</td>
 									<td class="px-4 py-4 text-neutral-300">{formatDate(item.downloaded_at)}</td>
 									<td class="px-4 py-4">
 										<div class="flex items-center gap-2">
