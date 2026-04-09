@@ -905,14 +905,7 @@ func (api *API) handleThumbnail(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	thumbnailVideo, err := api.store.GetVideoForThumbnail(video.Title)
-	if err != nil {
-		api.logger.Error("get video for thumbnail failed", "title", video.Title, "error", err)
-		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to get video for thumbnail"})
-		return
-	}
-
-	thumbnailPath, generated, err := api.ensureThumbnail(r.Context(), thumbnailVideo)
+	thumbnailPath, generated, err := api.ensureThumbnail(r.Context(), video)
 	if err != nil {
 		if errors.Is(err, errThumbnailFFmpegMissing) {
 			writeJSON(w, http.StatusNotImplemented, errorResponse{Error: "thumbnail generation requires ffmpeg"})
