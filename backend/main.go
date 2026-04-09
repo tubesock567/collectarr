@@ -63,17 +63,18 @@ func main() {
 		logger.Error("server shutdown failed", "error", err)
 	}
 
-	thumbsDone := make(chan struct{})
+	backgroundDone := make(chan struct{})
 	go func() {
 		api.thumbWg.Wait()
-		close(thumbsDone)
+		api.scanWg.Wait()
+		close(backgroundDone)
 	}()
 
 	select {
-	case <-thumbsDone:
-		logger.Info("background thumbnail tasks complete")
+	case <-backgroundDone:
+		logger.Info("background scan and thumbnail tasks complete")
 	case <-ctx.Done():
-		logger.Warn("timed out waiting for background thumbnail tasks")
+		logger.Warn("timed out waiting for background scan and thumbnail tasks")
 	}
 }
 

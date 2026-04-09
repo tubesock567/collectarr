@@ -21,8 +21,11 @@ type API struct {
 	rngMu         sync.Mutex
 	rngSeed       int64
 	thumbWg       sync.WaitGroup
+	scanWg        sync.WaitGroup
 	previewMu     sync.RWMutex
 	previewStatus PreviewGenerationStatus
+	scanMu        sync.RWMutex
+	scanStatus    ScanStatus
 	sessMu        sync.RWMutex
 	sessions      map[string]string
 }
@@ -35,6 +38,7 @@ func NewAPI(store *Store, scanner *Scanner, logger *slog.Logger, logs *LogBuffer
 		logs:          logs,
 		rngSeed:       time.Now().UnixNano(),
 		previewStatus: PreviewGenerationStatus{Status: "idle", Message: "No preview generation has been started yet."},
+		scanStatus:    ScanStatus{Status: "idle", Message: "No library scan has been started yet."},
 		sessions:      map[string]string{},
 	}
 }
@@ -68,6 +72,7 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/videos/{id:[0-9]+}/progress", api.authMiddleware(http.HandlerFunc(api.handleSaveWatchProgress))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/videos/continue-watching", api.authMiddleware(http.HandlerFunc(api.handleListContinueWatching))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/scan", api.authMiddleware(http.HandlerFunc(api.handleScan))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/scan/status", api.authMiddleware(http.HandlerFunc(api.handleGetScanStatus))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/directory", api.authMiddleware(http.HandlerFunc(api.handleDirectoryListing))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/settings/media-path", api.authMiddleware(http.HandlerFunc(api.handleGetMediaPath))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/settings/media-path", api.authMiddleware(http.HandlerFunc(api.handleSetMediaPath))).Methods(http.MethodPost, http.MethodOptions)

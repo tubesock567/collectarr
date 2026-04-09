@@ -47,6 +47,37 @@ type ScanReport struct {
 	Skipped    int `json:"skipped"`
 }
 
+type ScanProgress struct {
+	Phase          string `json:"phase,omitempty"`
+	FilesFound     int    `json:"files_found"`
+	TitlesFound    int    `json:"titles_found"`
+	ProcessedFiles int    `json:"processed_files"`
+	Inserted       int    `json:"inserted"`
+	Updated        int    `json:"updated"`
+	Skipped        int    `json:"skipped"`
+	CurrentFile    string `json:"current_file,omitempty"`
+	CurrentTitle   string `json:"current_title,omitempty"`
+	Message        string `json:"message,omitempty"`
+}
+
+type ScanStatus struct {
+	Status         string     `json:"status"`
+	Running        bool       `json:"running"`
+	MediaPath      string     `json:"media_path,omitempty"`
+	Phase          string     `json:"phase,omitempty"`
+	FilesFound     int        `json:"files_found"`
+	TitlesFound    int        `json:"titles_found"`
+	ProcessedFiles int        `json:"processed_files"`
+	Inserted       int        `json:"inserted"`
+	Updated        int        `json:"updated"`
+	Skipped        int        `json:"skipped"`
+	CurrentFile    string     `json:"current_file,omitempty"`
+	CurrentTitle   string     `json:"current_title,omitempty"`
+	Message        string     `json:"message,omitempty"`
+	StartedAt      *time.Time `json:"started_at,omitempty"`
+	CompletedAt    *time.Time `json:"completed_at,omitempty"`
+}
+
 type User struct {
 	ID                  int64  `json:"id"`
 	Username            string `json:"username"`

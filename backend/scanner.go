@@ -38,8 +38,17 @@ func NewScanner(mediaPath string, store *Store, logger *slog.Logger) *Scanner {
 }
 
 func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
+	return s.ScanLibraryWithProgress(ctx, nil)
+}
+
+func (s *Scanner) ScanLibraryWithProgress(ctx context.Context, onProgress func(ScanProgress)) (ScanReport, error) {
 	var report ScanReport
 	groupedVideos := make(map[string][]ScannedVideo)
+	emitProgress := func(progress ScanProgress) {
+		if onProgress != nil {
+			onProgress(progress)
+		}
+	}
 
 	info, err := os.Stat(s.mediaPath)
 	if err != nil {
@@ -50,6 +59,7 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 	}
 
 	s.logger.Info("starting media scan", "media_path", s.mediaPath)
+	emitProgress(ScanProgress{Phase: "discovering", Message: "Scanning media files..."})
 	fileCount := 0
 	lastLogTime := time.Now()
 
@@ -72,6 +82,12 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 
 		report.FilesFound++
 		fileCount++
+		emitProgress(ScanProgress{
+			Phase:       "discovering",
+			FilesFound:  report.FilesFound,
+			CurrentFile: d.Name(),
+			Message:     "Scanning media files...",
+		})
 
 		if fileCount%10 == 0 || time.Since(lastLogTime) > 5*time.Second {
 			s.logger.Info("scanning progress", "files_found", report.FilesFound, "current_file", d.Name())
@@ -102,6 +118,12 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 	}
 
 	s.logger.Info("processing videos", "total_files", report.FilesFound, "unique_titles", len(groupedVideos))
+	emitProgress(ScanProgress{
+		Phase:       "processing",
+		FilesFound:  report.FilesFound,
+		TitlesFound: len(groupedVideos),
+		Message:     "Updating library records...",
+	})
 
 	for _, videos := range groupedVideos {
 		for _, video := range videos {
@@ -112,11 +134,33 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 					if s.store.IsUniquePathError(err) {
 						s.logger.Warn("skipping file due to path conflict", "path", video.Path)
 						report.Skipped++
+						emitProgress(ScanProgress{
+							Phase:          "processing",
+							FilesFound:     report.FilesFound,
+							TitlesFound:    len(groupedVideos),
+							ProcessedFiles: report.Inserted + report.Updated + report.Skipped,
+							Inserted:       report.Inserted,
+							Updated:        report.Updated,
+							Skipped:        report.Skipped,
+							CurrentTitle:   video.Title,
+							Message:        "Updating library records...",
+						})
 						continue
 					}
 					return report, err
 				}
 				report.Updated++
+				emitProgress(ScanProgress{
+					Phase:          "processing",
+					FilesFound:     report.FilesFound,
+					TitlesFound:    len(groupedVideos),
+					ProcessedFiles: report.Inserted + report.Updated + report.Skipped,
+					Inserted:       report.Inserted,
+					Updated:        report.Updated,
+					Skipped:        report.Skipped,
+					CurrentTitle:   video.Title,
+					Message:        "Updating library records...",
+				})
 
 				if report.Updated%10 == 0 {
 					s.logger.Info("updating progress", "updated", report.Updated, "current_title", video.Title)
@@ -126,11 +170,33 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 					if s.store.IsUniquePathError(err) {
 						s.logger.Warn("skipping file due to path conflict", "path", video.Path)
 						report.Skipped++
+						emitProgress(ScanProgress{
+							Phase:          "processing",
+							FilesFound:     report.FilesFound,
+							TitlesFound:    len(groupedVideos),
+							ProcessedFiles: report.Inserted + report.Updated + report.Skipped,
+							Inserted:       report.Inserted,
+							Updated:        report.Updated,
+							Skipped:        report.Skipped,
+							CurrentTitle:   video.Title,
+							Message:        "Updating library records...",
+						})
 						continue
 					}
 					return report, err
 				}
 				report.Inserted++
+				emitProgress(ScanProgress{
+					Phase:          "processing",
+					FilesFound:     report.FilesFound,
+					TitlesFound:    len(groupedVideos),
+					ProcessedFiles: report.Inserted + report.Updated + report.Skipped,
+					Inserted:       report.Inserted,
+					Updated:        report.Updated,
+					Skipped:        report.Skipped,
+					CurrentTitle:   video.Title,
+					Message:        "Updating library records...",
+				})
 
 				if report.Inserted%10 == 0 {
 					s.logger.Info("inserting progress", "inserted", report.Inserted, "current_title", video.Title)
@@ -142,6 +208,16 @@ func (s *Scanner) ScanLibrary(ctx context.Context) (ScanReport, error) {
 	}
 
 	s.logger.Info("completed media scan", "files_found", report.FilesFound, "inserted", report.Inserted, "updated", report.Updated, "skipped", report.Skipped)
+	emitProgress(ScanProgress{
+		Phase:          "completed",
+		FilesFound:     report.FilesFound,
+		TitlesFound:    len(groupedVideos),
+		ProcessedFiles: report.Inserted + report.Updated + report.Skipped,
+		Inserted:       report.Inserted,
+		Updated:        report.Updated,
+		Skipped:        report.Skipped,
+		Message:        "Library scan complete.",
+	})
 	return report, nil
 }
 
