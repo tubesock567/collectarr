@@ -201,6 +201,21 @@
 		return data?.error || fallback;
 	}
 
+	function ensureArray(value) {
+		return Array.isArray(value) ? value : [];
+	}
+
+	function ensureMetadataOptions(value) {
+		if (!value || typeof value !== 'object') {
+			return { tags: [], actors: [] };
+		}
+
+		return {
+			tags: ensureArray(value.tags),
+			actors: ensureArray(value.actors)
+		};
+	}
+
 	let isSpinning = $state(false);
 
 	async function loadVideos() {
@@ -211,7 +226,7 @@
 			if (!res.ok) {
 				throw new Error(await readError(res, 'Failed to fetch videos'));
 			}
-			videos = await res.json();
+			videos = ensureArray(await res.json());
 		} finally {
 			const elapsed = Date.now() - startTime;
 			const minSpinTime = 500;
@@ -230,21 +245,22 @@
 		if (!res.ok) {
 			throw new Error(await readError(res, 'Failed to fetch metadata options'));
 		}
-		metadataOptions = await res.json();
+		metadataOptions = ensureMetadataOptions(await res.json());
 	}
 
 	async function loadPlaylists() {
 		const res = await fetchWithTimeout('/api/playlists');
-		if (res.ok) {
-			playlists = await res.json();
+		if (!res.ok) {
+			throw new Error(await readError(res, 'Failed to fetch playlists'));
 		}
+		playlists = ensureArray(await res.json());
 	}
 
 	async function loadContinueWatching() {
 		try {
 			const res = await fetchWithTimeout('/api/videos/continue-watching?limit=8');
 			if (res.ok) {
-				continueWatching = await res.json();
+				continueWatching = ensureArray(await res.json());
 			}
 		} catch (err) {
 			// Silently ignore continue watching errors - it's not critical

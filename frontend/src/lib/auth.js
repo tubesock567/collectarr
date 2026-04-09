@@ -5,6 +5,7 @@ import { get, writable } from 'svelte/store';
 const initialState = {
 	isAuthenticated: false,
 	username: '',
+	forcePasswordChange: false,
 	loading: true
 };
 

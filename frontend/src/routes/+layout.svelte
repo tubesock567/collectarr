@@ -422,7 +422,7 @@
 <Toast />
 
 <main class="min-h-screen bg-black text-white w-full">
-	{#if !$auth.loading || $page.url.pathname === '/login'}
+	{#if $page.url.pathname === '/login' || (!$auth.loading && $auth.isAuthenticated)}
 		{@render children()}
 	{:else}
 		<div class="min-h-screen flex items-center justify-center">
