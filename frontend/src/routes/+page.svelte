@@ -177,6 +177,25 @@
 		return response.json().catch(() => null);
 	}
 
+	async function fetchWithTimeout(url, options = {}, timeoutMs = 10000) {
+		const controller = new AbortController();
+		const timeoutId = setTimeout(() => controller.abort(), timeoutMs);
+
+		try {
+			return await authFetch(url, {
+				...options,
+				signal: controller.signal
+			});
+		} catch (err) {
+			if (err?.name === 'AbortError') {
+				throw new Error('Request timed out');
+			}
+			throw err;
+		} finally {
+			clearTimeout(timeoutId);
+		}
+	}
+
 	async function readError(res, fallback) {
 		const data = await readJSONSafe(res);
 		return data?.error || fallback;
@@ -188,7 +207,7 @@
 		isSpinning = true;
 		const startTime = Date.now();
 		try {
-			const res = await authFetch('/api/videos');
+			const res = await fetchWithTimeout('/api/videos');
 			if (!res.ok) {
 				throw new Error(await readError(res, 'Failed to fetch videos'));
 			}
@@ -207,7 +226,7 @@
 	}
 
 	async function loadMetadataOptions() {
-		const res = await authFetch('/api/videos/metadata/options');
+		const res = await fetchWithTimeout('/api/videos/metadata/options');
 		if (!res.ok) {
 			throw new Error(await readError(res, 'Failed to fetch metadata options'));
 		}
@@ -215,7 +234,7 @@
 	}
 
 	async function loadPlaylists() {
-		const res = await authFetch('/api/playlists');
+		const res = await fetchWithTimeout('/api/playlists');
 		if (res.ok) {
 			playlists = await res.json();
 		}
@@ -223,7 +242,7 @@
 
 	async function loadContinueWatching() {
 		try {
-			const res = await authFetch('/api/videos/continue-watching?limit=8');
+			const res = await fetchWithTimeout('/api/videos/continue-watching?limit=8');
 			if (res.ok) {
 				continueWatching = await res.json();
 			}
@@ -527,8 +546,16 @@
 		document.addEventListener('click', handleClickOutside);
 
 		(async () => {
+			loadMetadataOptions().catch((err) => {
+				console.error('Failed to load metadata options:', err);
+			});
+			loadPlaylists().catch((err) => {
+				console.error('Failed to load playlists:', err);
+			});
+			loadContinueWatching();
+
 			try {
-				await Promise.all([loadVideos(), loadMetadataOptions(), loadPlaylists(), loadContinueWatching()]);
+				await loadVideos();
 			} catch (err) {
 				error = err.message;
 			} finally {
