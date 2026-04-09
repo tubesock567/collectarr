@@ -237,6 +237,12 @@
 						<span class="text-[10px] tracking-[0.25em] text-neutral-500">Active</span>
 					{/if}
 				</a>
+				<a href="/torrents" class="mt-3 flex items-center justify-between border border-neutral-800 px-4 py-4 text-xs font-semibold uppercase tracking-[0.3em] transition-colors {$page.url.pathname === '/torrents' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:border-neutral-600 hover:text-white'}">
+					<span>Torrents</span>
+					{#if $page.url.pathname === '/torrents'}
+						<span class="text-[10px] tracking-[0.25em] text-neutral-500">Active</span>
+					{/if}
+				</a>
 				<a href="/settings" class="mt-3 flex items-center justify-between border border-neutral-800 px-4 py-4 text-xs font-semibold uppercase tracking-[0.3em] transition-colors {$page.url.pathname === '/settings' ? 'bg-neutral-900 text-white' : 'text-neutral-400 hover:border-neutral-600 hover:text-white'}">
 					<span>Settings</span>
 					{#if $page.url.pathname === '/settings'}
@@ -295,6 +301,7 @@
 			{/if}
 			<a href="/" class="text-xs font-semibold tracking-widest uppercase {$page.url.pathname === '/' ? 'text-white' : 'text-neutral-500'} hover:text-white transition-colors">Library</a>
 			<a href="/playlists" class="text-xs font-semibold tracking-widest uppercase {$page.url.pathname.startsWith('/playlists') ? 'text-white' : 'text-neutral-500'} hover:text-white transition-colors">Playlists</a>
+			<a href="/torrents" class="text-xs font-semibold tracking-widest uppercase {$page.url.pathname === '/torrents' ? 'text-white' : 'text-neutral-500'} hover:text-white transition-colors">Torrents</a>
 			<a href="/settings" class="text-xs font-semibold tracking-widest uppercase {$page.url.pathname === '/settings' ? 'text-white' : 'text-neutral-500'} hover:text-white transition-colors">Settings</a>
 			{#if $auth.isAuthenticated}
 				<button class="text-xs font-semibold tracking-widest uppercase text-neutral-500 hover:text-white transition-colors" onclick={() => logout()}>
