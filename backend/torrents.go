@@ -143,6 +143,10 @@ func (api *API) handleSearchTorrents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	minSeeders, _ := strconv.Atoi(r.URL.Query().Get("min_seeders"))
+	minSize, _ := parseSizeParam(r.URL.Query().Get("min_size"))
+	maxSize, _ := parseSizeParam(r.URL.Query().Get("max_size"))
+
 	indexers, err := api.store.ListTorrentIndexers()
 	if err != nil {
 		api.logger.Error("load torrent indexers for search failed", "error", err)
@@ -154,7 +158,7 @@ func (api *API) handleSearchTorrents(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	results, warnings, err := api.searchTorrents(r.Context(), query, indexers)
+	results, warnings, err := api.searchTorrents(r.Context(), query, indexers, minSeeders, minSize, maxSize)
 	if err != nil {
 		api.logger.Error("torrent search failed", "query", query, "error", err)
 		writeJSON(w, http.StatusBadGateway, errorResponse{Error: "torrent search failed"})
@@ -165,7 +169,31 @@ func (api *API) handleSearchTorrents(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, TorrentSearchResponse{Query: query, Results: results, Warnings: warnings})
 }
 
-func (api *API) searchTorrents(parent context.Context, query string, indexers []TorrentIndexer) ([]TorrentSearchResult, []string, error) {
+func parseSizeParam(value string) (int64, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return 0, nil
+	}
+	value = strings.ToLower(value)
+	multiplier := int64(1)
+	if strings.HasSuffix(value, "gb") {
+		multiplier = 1024 * 1024 * 1024
+		value = strings.TrimSuffix(value, "gb")
+	} else if strings.HasSuffix(value, "mb") {
+		multiplier = 1024 * 1024
+		value = strings.TrimSuffix(value, "mb")
+	} else if strings.HasSuffix(value, "kb") {
+		multiplier = 1024
+		value = strings.TrimSuffix(value, "kb")
+	}
+	num, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil {
+		return 0, err
+	}
+	return int64(num * float64(multiplier)), nil
+}
+
+func (api *API) searchTorrents(parent context.Context, query string, indexers []TorrentIndexer, minSeeders int, minSize int64, maxSize int64) ([]TorrentSearchResult, []string, error) {
 	ctx, cancel := context.WithTimeout(parent, torrentSearchTimeout)
 	defer cancel()
 
@@ -202,25 +230,39 @@ func (api *API) searchTorrents(parent context.Context, query string, indexers []
 		allResults = append(allResults, response.results...)
 	}
 
-	sort.Slice(allResults, func(i, j int) bool {
-		if allResults[i].Seeders == allResults[j].Seeders {
-			if allResults[i].Leechers == allResults[j].Leechers {
-				return strings.ToLower(allResults[i].Title) < strings.ToLower(allResults[j].Title)
-			}
-			return allResults[i].Leechers > allResults[j].Leechers
+	filteredResults := make([]TorrentSearchResult, 0, len(allResults))
+	for _, result := range allResults {
+		if minSeeders > 0 && result.Seeders < minSeeders {
+			continue
 		}
-		return allResults[i].Seeders > allResults[j].Seeders
+		if minSize > 0 && result.Size < minSize {
+			continue
+		}
+		if maxSize > 0 && result.Size > maxSize {
+			continue
+		}
+		filteredResults = append(filteredResults, result)
+	}
+
+	sort.Slice(filteredResults, func(i, j int) bool {
+		if filteredResults[i].Seeders == filteredResults[j].Seeders {
+			if filteredResults[i].Leechers == filteredResults[j].Leechers {
+				return strings.ToLower(filteredResults[i].Title) < strings.ToLower(filteredResults[j].Title)
+			}
+			return filteredResults[i].Leechers > filteredResults[j].Leechers
+		}
+		return filteredResults[i].Seeders > filteredResults[j].Seeders
 	})
 
-	if len(allResults) == 0 && len(errs) > 0 {
-		return nil, nil, errors.Join(errs...)
+	if len(filteredResults) == 0 && len(errs) > 0 {
+		return nil, warnings, errors.Join(errs...)
 	}
 
 	if len(errs) > 0 {
-		api.logger.Warn("torrent search partially failed", "query", query, "errors", len(errs), "results", len(allResults))
+		api.logger.Warn("torrent search partially failed", "query", query, "errors", len(errs), "results", len(filteredResults))
 	}
 
-	return allResults, warnings, nil
+	return filteredResults, warnings, nil
 }
 
 func (api *API) searchTorrentIndexer(ctx context.Context, indexer TorrentIndexer, query string) ([]TorrentSearchResult, error) {
@@ -572,6 +614,8 @@ func (api *API) handleAddTorrentDownloadHistory(w http.ResponseWriter, r *http.R
 func (api *API) handleListTorrentDownloadHistory(w http.ResponseWriter, r *http.Request) {
 	pageStr := r.URL.Query().Get("page")
 	perPageStr := r.URL.Query().Get("per_page")
+	tracker := strings.TrimSpace(r.URL.Query().Get("tracker"))
+	search := strings.TrimSpace(r.URL.Query().Get("search"))
 
 	page := 1
 	if pageStr != "" {
@@ -587,7 +631,7 @@ func (api *API) handleListTorrentDownloadHistory(w http.ResponseWriter, r *http.
 		}
 	}
 
-	items, totalCount, err := api.store.ListTorrentDownloadHistory(page, perPage)
+	items, totalCount, err := api.store.ListTorrentDownloadHistoryFiltered(tracker, search, page, perPage)
 	if err != nil {
 		api.logger.Error("list torrent download history failed", "error", err)
 		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load history"})
@@ -605,6 +649,33 @@ func (api *API) handleListTorrentDownloadHistory(w http.ResponseWriter, r *http.
 		CurrentPage: page,
 		TotalPages:  totalPages,
 	})
+}
+
+func (api *API) handleDeleteTorrentDownloadHistory(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	idStr := vars["id"]
+	if idStr == "" {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "history id is required"})
+		return
+	}
+
+	id, err := strconv.ParseInt(idStr, 10, 64)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid history id"})
+		return
+	}
+
+	if err := api.store.DeleteTorrentDownloadHistory(id); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			writeJSON(w, http.StatusNotFound, errorResponse{Error: "history item not found"})
+			return
+		}
+		api.logger.Error("delete torrent download history failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to delete history item"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }
 
 func (api *API) handleClearTorrentDownloadHistory(w http.ResponseWriter, r *http.Request) {

@@ -23,17 +23,56 @@
 
 	// Search state
 	let query = $state('');
+	let minSeeders = $state('');
+	let minSize = $state('');
+	let maxSize = $state('');
+	let resultFilter = $state('');
 	let searching = $state(false);
 	let searchMessage = $state('');
 	let searchedQuery = $state('');
 	let results = $state([]);
 	let warnings = $state([]);
+	let recentSearches = $state([]);
+	let showRecentSearches = $state(false);
+	let searchInputRef = $state(null);
 
 	// Pagination state
 	let currentPage = $state(1);
 	let itemsPerPage = $state(20);
 	let totalResults = $state(0);
 	let totalPages = $derived(Math.max(1, Math.ceil(totalResults / itemsPerPage)));
+	
+	// Filtered and deduplicated results
+	let uniqueResults = $derived.by(() => {
+		const seen = new Map();
+		const filtered = [];
+		for (const result of results) {
+			const key = `${result.title?.toLowerCase()}-${result.size}`;
+			if (seen.has(key)) {
+				const existing = seen.get(key);
+				if (result.seeders > existing.seeders) {
+					seen.set(key, result);
+					const idx = filtered.indexOf(existing);
+					if (idx >= 0) filtered[idx] = result;
+				}
+			} else {
+				seen.set(key, result);
+				filtered.push(result);
+			}
+		}
+		return filtered;
+	});
+
+	let filteredResults = $derived.by(() => {
+		if (!resultFilter.trim()) return uniqueResults;
+		const filter = resultFilter.toLowerCase();
+		return uniqueResults.filter(r => 
+			r.title?.toLowerCase().includes(filter) ||
+			r.tracker?.toLowerCase().includes(filter)
+		);
+	});
+
+	let totalResultsFiltered = $derived(filteredResults.length);
 	let paginatedResults = $derived.by(() => {
 		const start = (currentPage - 1) * itemsPerPage;
 		return sortedResults.slice(start, start + itemsPerPage);
@@ -43,7 +82,7 @@
 	let sortBy = $state('seeders');
 	let sortOrder = $state('desc');
 	let sortedResults = $derived.by(() => {
-		const sorted = [...results];
+		const sorted = [...filteredResults];
 		sorted.sort((a, b) => {
 			let valA, valB;
 			switch (sortBy) {
@@ -90,12 +129,84 @@
 	let historyTotalCount = $state(0);
 	let historyTotalPages = $derived(Math.max(1, Math.ceil(historyTotalCount / historyPerPage)));
 	let historyMessage = $state('');
+	let historyTrackerFilter = $state('');
+	let historySearchFilter = $state('');
+	let uniqueTrackers = $derived([...new Set(historyItems.map(i => i.tracker).filter(Boolean))]);
+	let deletingHistoryId = $state(null);
 
 	// Auto-refresh history when tab is active
 	$effect(() => {
 		if (activeTab !== 'history') return;
 		loadHistory();
 	});
+
+	// Auto-search debounce
+	let searchTimeout = null;
+	$effect(() => {
+		if (!query.trim() || searching) return;
+		if (searchTimeout) clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => {
+			if (query.trim().length >= 3) {
+				searchTorrents();
+			}
+		}, 800);
+		return () => {
+			if (searchTimeout) clearTimeout(searchTimeout);
+		};
+	});
+
+	// Load recent searches from localStorage
+	onMount(async () => {
+		await loadIndexers();
+		const saved = localStorage.getItem('torrentRecentSearches');
+		if (saved) {
+			try {
+				recentSearches = JSON.parse(saved);
+			} catch {}
+		}
+		
+		// Keyboard shortcuts
+		document.addEventListener('keydown', handleKeydown);
+		return () => {
+			document.removeEventListener('keydown', handleKeydown);
+		};
+	});
+
+	function handleKeydown(e) {
+		// / or Ctrl+K to focus search
+		if ((e.key === '/' || (e.ctrlKey && e.key === 'k')) && activeTab === 'search') {
+			e.preventDefault();
+			searchInputRef?.focus();
+		}
+		// Arrow keys for pagination
+		if (activeTab === 'search' && results.length > 0) {
+			if (e.key === 'ArrowLeft' && currentPage > 1) {
+				e.preventDefault();
+				goToPage(currentPage - 1);
+			}
+			if (e.key === 'ArrowRight' && currentPage < totalPages) {
+				e.preventDefault();
+				goToPage(currentPage + 1);
+			}
+		}
+	}
+
+	function saveRecentSearch(searchQuery) {
+		if (!searchQuery.trim()) return;
+		recentSearches = [searchQuery, ...recentSearches.filter(s => s !== searchQuery)].slice(0, 10);
+		localStorage.setItem('torrentRecentSearches', JSON.stringify(recentSearches));
+	}
+
+	function selectRecentSearch(search) {
+		query = search;
+		showRecentSearches = false;
+		searchTorrents();
+	}
+
+	function clearRecentSearches() {
+		recentSearches = [];
+		localStorage.removeItem('torrentRecentSearches');
+	}
 
 	async function readJSONSafe(response) {
 		try {
@@ -109,10 +220,6 @@
 		const data = await readJSONSafe(response);
 		return data?.error || fallback;
 	}
-
-	onMount(async () => {
-		await loadIndexers();
-	});
 
 	async function loadIndexers() {
 		indexersLoading = true;
@@ -196,6 +303,7 @@
 		totalResults = 0;
 		warnings = [];
 		currentPage = 1;
+		resultFilter = '';
 
 		const trimmedQuery = query.trim();
 		if (!trimmedQuery) {
@@ -209,8 +317,13 @@
 
 		searching = true;
 		searchedQuery = trimmedQuery;
+		saveRecentSearch(trimmedQuery);
 		try {
 			const params = new URLSearchParams({ q: trimmedQuery });
+			if (minSeeders) params.set('min_seeders', minSeeders);
+			if (minSize) params.set('min_size', minSize);
+			if (maxSize) params.set('max_size', maxSize);
+			
 			const response = await authFetch(`/api/torrents/search?${params.toString()}`);
 			if (!response.ok) {
 				throw new Error(await readError(response, 'Torrent search failed'));
@@ -229,6 +342,7 @@
 
 	function handleSearchSubmit(event) {
 		event.preventDefault();
+		showRecentSearches = false;
 		searchTorrents();
 	}
 
@@ -249,24 +363,63 @@
 		}
 	}
 
-	async function recordDownload(result) {
+	async function recordDownload(result, event) {
+		// Prevent default download behavior to track status
+		if (event) event.preventDefault();
+		
+		const downloadUrl = result.download_url || result.download_url;
+		if (!downloadUrl) return;
+
+		// Record as pending first
 		try {
 			await authFetch('/api/torrents/history', {
 				method: 'POST',
 				body: JSON.stringify({
 					title: result.title,
 					url: result.url,
-					download_url: result.download_url,
+					download_url: downloadUrl,
 					tracker: result.tracker,
 					size: result.size,
 					seeders: result.seeders,
 					leechers: result.leechers,
-					freeleech: result.freeleech
+					freeleech: result.freeleech,
+					status: 'pending'
 				})
 			});
 		} catch (err) {
 			console.error('Failed to record download:', err);
 		}
+
+		// Trigger actual download
+		const a = document.createElement('a');
+		a.href = downloadUrl;
+		a.download = '';
+		a.target = '_blank';
+		document.body.appendChild(a);
+		a.click();
+		document.body.removeChild(a);
+
+		// Update status to success after a brief delay
+		setTimeout(async () => {
+			try {
+				await authFetch('/api/torrents/history', {
+					method: 'POST',
+					body: JSON.stringify({
+						title: result.title,
+						url: result.url,
+						download_url: downloadUrl,
+						tracker: result.tracker,
+						size: result.size,
+						seeders: result.seeders,
+						leechers: result.leechers,
+						freeleech: result.freeleech,
+						status: 'success'
+					})
+				});
+			} catch (err) {
+				console.error('Failed to update download status:', err);
+			}
+		}, 1000);
 	}
 
 	async function loadHistory() {
@@ -277,6 +430,9 @@
 				page: historyPage.toString(),
 				per_page: historyPerPage.toString()
 			});
+			if (historyTrackerFilter) params.set('tracker', historyTrackerFilter);
+			if (historySearchFilter) params.set('search', historySearchFilter);
+			
 			const response = await authFetch(`/api/torrents/history?${params.toString()}`);
 			if (!response.ok) {
 				throw new Error(await readError(response, 'Failed to load history'));
@@ -288,6 +444,22 @@
 			historyMessage = `Error: ${error.message}`;
 		} finally {
 			historyLoading = false;
+		}
+	}
+
+	async function deleteHistoryItem(id) {
+		if (deletingHistoryId) return;
+		deletingHistoryId = id;
+		try {
+			const response = await authFetch(`/api/torrents/history/${id}`, { method: 'DELETE' });
+			if (!response.ok) {
+				throw new Error(await readError(response, 'Failed to delete history item'));
+			}
+			await loadHistory();
+		} catch (error) {
+			historyMessage = `Error: ${error.message}`;
+		} finally {
+			deletingHistoryId = null;
 		}
 	}
 
@@ -363,6 +535,26 @@
 		}
 		return '<svg class="inline h-3 w-3 ml-1 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>';
 	}
+
+	function isMagnetUrl(url) {
+		return url?.startsWith('magnet:');
+	}
+
+	function getStatusColor(status) {
+		switch (status) {
+			case 'success': return 'text-emerald-400';
+			case 'failed': return 'text-red-400';
+			default: return 'text-amber-400';
+		}
+	}
+
+	function getStatusLabel(status) {
+		switch (status) {
+			case 'success': return 'Success';
+			case 'failed': return 'Failed';
+			default: return 'Pending';
+		}
+	}
 </script>
 
 <svelte:head>
@@ -406,15 +598,55 @@
 					{/if}
 				</div>
 
-				<form class="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_auto]" onsubmit={handleSearchSubmit}>
-					<input bind:value={query} type="search" placeholder="Search torrents..." class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500" />
-					<button type="submit" disabled={searching} class="bg-white px-6 py-3 text-xs font-bold uppercase tracking-widest text-black transition-colors hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500">
-						{#if searching}
-							Searching...
-						{:else}
-							Search
+				<form class="mt-6 grid gap-4" onsubmit={handleSearchSubmit}>
+					<div class="relative">
+						<input 
+							bind:this={searchInputRef}
+							bind:value={query} 
+							onfocus={() => showRecentSearches = recentSearches.length > 0}
+							onblur={() => setTimeout(() => showRecentSearches = false, 200)}
+							type="search" 
+							placeholder="Search torrents... (press / to focus)" 
+							class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500" 
+						/>
+						{#if showRecentSearches}
+							<div class="absolute top-full left-0 right-0 z-20 mt-1 border border-neutral-700 bg-neutral-900 shadow-lg">
+								<div class="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
+									<span class="text-xs uppercase tracking-[0.25em] text-neutral-500">Recent Searches</span>
+									<button type="button" onclick={clearRecentSearches} class="text-[10px] text-neutral-500 hover:text-white">Clear</button>
+								</div>
+								{#each recentSearches as search}
+									<button type="button" onclick={() => selectRecentSearch(search)} class="block w-full px-4 py-2 text-left text-sm text-neutral-300 hover:bg-neutral-800">
+										{search}
+									</button>
+								{/each}
+							</div>
 						{/if}
-					</button>
+					</div>
+					
+					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+						<label class="grid gap-1">
+							<span class="text-[10px] uppercase tracking-[0.25em] text-neutral-500">Min Seeders</span>
+							<input bind:value={minSeeders} type="number" min="0" placeholder="e.g., 5" class="w-full border border-neutral-800 bg-black px-3 py-2 text-sm outline-none focus:border-neutral-500" />
+						</label>
+						<label class="grid gap-1">
+							<span class="text-[10px] uppercase tracking-[0.25em] text-neutral-500">Min Size (GB)</span>
+							<input bind:value={minSize} type="number" min="0" step="0.1" placeholder="e.g., 1" class="w-full border border-neutral-800 bg-black px-3 py-2 text-sm outline-none focus:border-neutral-500" />
+						</label>
+						<label class="grid gap-1">
+							<span class="text-[10px] uppercase tracking-[0.25em] text-neutral-500">Max Size (GB)</span>
+							<input bind:value={maxSize} type="number" min="0" step="0.1" placeholder="e.g., 10" class="w-full border border-neutral-800 bg-black px-3 py-2 text-sm outline-none focus:border-neutral-500" />
+						</label>
+						<div class="flex items-end">
+							<button type="submit" disabled={searching} class="w-full bg-white px-6 py-2 text-xs font-bold uppercase tracking-widest text-black transition-colors hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500">
+								{#if searching}
+									Searching...
+								{:else}
+									Search
+								{/if}
+							</button>
+						</div>
+					</div>
 				</form>
 
 				{#if searchMessage}
@@ -423,7 +655,10 @@
 
 				{#if warnings.length > 0}
 					<div class="mt-4 space-y-2 border border-amber-900 bg-amber-950/20 p-4 text-xs text-amber-300">
-						<p class="uppercase tracking-[0.25em] text-amber-400">Indexer warnings</p>
+						<div class="flex items-center justify-between">
+							<p class="uppercase tracking-[0.25em] text-amber-400">Indexer warnings ({warnings.length})</p>
+							<button onclick={searchTorrents} class="text-[10px] uppercase tracking-widest text-amber-400 hover:text-white">Retry</button>
+						</div>
 						{#each warnings as warning}
 							<p>{warning}</p>
 						{/each}
@@ -431,16 +666,27 @@
 				{/if}
 			</section>
 
-			{#if results.length > 0}
+			{#if filteredResults.length > 0}
 				<section class="border border-neutral-800 p-6">
-					<div class="flex items-center justify-between gap-4 mb-4">
+					<div class="flex flex-col gap-4 mb-4 lg:flex-row lg:items-center lg:justify-between">
 						<div>
 							<h2 class="text-sm font-semibold uppercase tracking-widest text-white">Results</h2>
-							<p class="mt-1 text-xs text-neutral-500">Click column headers to sort. Click title to open torrent page.</p>
+							<p class="mt-1 text-xs text-neutral-500">Click column headers to sort. Click title to open torrent page. Use arrow keys for pagination.</p>
 						</div>
-						<p class="text-xs uppercase tracking-[0.25em] text-neutral-500">
-							{(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, totalResults)} of {totalResults}
-						</p>
+						<div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+							<input 
+								bind:value={resultFilter} 
+								type="text" 
+								placeholder="Filter results..." 
+								class="border border-neutral-800 bg-black px-3 py-2 text-sm outline-none focus:border-neutral-500" 
+							/>
+							<p class="text-xs uppercase tracking-[0.25em] text-neutral-500">
+								{(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, totalResultsFiltered)} of {totalResultsFiltered}
+								{#if totalResultsFiltered !== totalResults}
+									(filtered from {totalResults})
+								{/if}
+							</p>
+						</div>
 					</div>
 
 					<div class="overflow-x-auto border border-neutral-800 bg-black">
@@ -470,7 +716,7 @@
 							</thead>
 							<tbody class="divide-y divide-neutral-900">
 								{#each paginatedResults as result, index (`${result.tracker}-${result.download_url || result.url || result.title}-${index}`)}
-									<tr class="align-top hover:bg-neutral-950/70">
+									<tr class="align-top hover:bg-neutral-950/70 {result.seeders >= 50 ? 'bg-emerald-950/10' : result.seeders >= 20 ? 'bg-blue-950/10' : ''}">
 										<td class="max-w-xl px-4 py-4 text-white">
 											<div class="space-y-2">
 												<div class="flex items-center gap-2 flex-wrap">
@@ -482,27 +728,30 @@
 													{#if result.freeleech}
 														<span class="inline-flex border border-emerald-800 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-emerald-300">Freeleech</span>
 													{/if}
+													{#if isMagnetUrl(result.download_url)}
+														<span class="inline-flex border border-purple-800 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-purple-300">Magnet</span>
+													{:else}
+														<span class="inline-flex border border-blue-800 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-blue-300">Torrent</span>
+													{/if}
 												</div>
 											</div>
 										</td>
 										<td class="px-4 py-4 text-neutral-300">{result.tracker || 'Unknown'}</td>
 										<td class="px-4 py-4 text-neutral-300">{formatBytes(result.size)}</td>
-										<td class="px-4 py-4 text-neutral-300">{result.seeders ?? 0}</td>
+										<td class="px-4 py-4 {result.seeders >= 50 ? 'text-emerald-400 font-semibold' : result.seeders >= 20 ? 'text-blue-400' : 'text-neutral-300'}">{result.seeders ?? 0}</td>
 										<td class="px-4 py-4 text-neutral-300">{result.leechers ?? 0}</td>
 										<td class="px-4 py-4 text-neutral-300" title={result.published ? formatDate(result.published) : ''}>{result.published ? formatRelativeTime(result.published) : 'Unknown'}</td>
 										<td class="px-4 py-4">
 											{#if result.download_url}
-												<a 
-													href={result.download_url} 
-													download 
+												<button 
+													onclick={(e) => recordDownload(result, e)}
 													class="inline-flex items-center justify-center text-white transition-colors hover:text-neutral-300" 
 													aria-label="Download"
-													onclick={() => recordDownload(result)}
 												>
 													<svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
 														<path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
 													</svg>
-												</a>
+												</button>
 											{:else}
 												<span class="text-xs uppercase tracking-[0.25em] text-neutral-600">N/A</span>
 											{/if}
@@ -557,8 +806,11 @@
 					{/if}
 				</section>
 			{:else if !searching && searchedQuery}
-				<div class="flex min-h-64 items-center justify-center border border-neutral-800 bg-black px-6 text-center text-xs uppercase tracking-widest text-neutral-500">
-					No torrent results for current query.
+				<div class="flex min-h-64 flex-col items-center justify-center border border-neutral-800 bg-black px-6 text-center">
+					<p class="text-xs uppercase tracking-widest text-neutral-500 mb-4">No torrent results for current query.</p>
+					<button onclick={searchTorrents} class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 transition-colors hover:text-white hover:border-neutral-500">
+						Retry Search
+					</button>
 				</div>
 			{/if}
 		</section>
@@ -589,7 +841,12 @@
 						<span class="loading loading-spinner loading-md text-white"></span>
 					</div>
 				{:else if indexers.length === 0}
-					<div class="border border-neutral-800 bg-black px-4 py-5 text-sm text-neutral-500">No Jackett indexers saved yet. Click + to add one.</div>
+					<div class="flex min-h-32 flex-col items-center justify-center border border-neutral-800 bg-black px-4 py-5 text-center">
+						<p class="text-sm text-neutral-500 mb-4">No Jackett indexers saved yet.</p>
+						<button onclick={() => showAddIndexerPopup = true} class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 transition-colors hover:text-white hover:border-neutral-500">
+							Add Your First Indexer
+						</button>
+					</div>
 				{:else}
 					<div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
 						{#each indexers as indexer (indexer.id)}
@@ -615,12 +872,25 @@
 	<!-- History Tab -->
 	{#if activeTab === 'history'}
 		<section class="border border-neutral-800 p-6">
-			<div class="flex items-center justify-between gap-4 mb-6">
+			<div class="flex flex-col gap-4 mb-6 lg:flex-row lg:items-center lg:justify-between">
 				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white">Download History</h2>
 					<p class="mt-1 text-xs text-neutral-500">Track your downloaded torrents.</p>
 				</div>
-				<div class="flex items-center gap-4">
+				<div class="flex flex-col gap-3 sm:flex-row sm:items-center">
+					<select bind:value={historyTrackerFilter} onchange={loadHistory} class="border border-neutral-800 bg-black px-3 py-2 text-sm outline-none focus:border-neutral-500">
+						<option value="">All Trackers</option>
+						{#each uniqueTrackers as tracker}
+							<option value={tracker}>{tracker}</option>
+						{/each}
+					</select>
+					<input 
+						bind:value={historySearchFilter} 
+						oninput={() => { historyPage = 1; loadHistory(); }}
+						type="text" 
+						placeholder="Search history..." 
+						class="border border-neutral-800 bg-black px-3 py-2 text-sm outline-none focus:border-neutral-500" 
+					/>
 					<p class="text-xs uppercase tracking-[0.25em] text-neutral-500">{historyTotalCount} items</p>
 					{#if historyItems.length > 0}
 						<button onclick={clearHistory} class="border border-red-900 px-3 py-2 text-[11px] font-semibold uppercase tracking-[0.25em] text-red-300 transition-colors hover:bg-red-950">
@@ -639,8 +909,11 @@
 					<span class="loading loading-spinner loading-lg text-white"></span>
 				</div>
 			{:else if historyItems.length === 0}
-				<div class="flex min-h-64 items-center justify-center border border-neutral-800 bg-black px-6 text-center text-xs uppercase tracking-widest text-neutral-500">
-					No download history yet. Download torrents from the Search tab.
+				<div class="flex min-h-64 flex-col items-center justify-center border border-neutral-800 bg-black px-6 text-center">
+					<p class="text-xs uppercase tracking-widest text-neutral-500 mb-4">No download history yet. Download torrents from the Search tab.</p>
+					<button onclick={() => activeTab = 'search'} class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 transition-colors hover:text-white hover:border-neutral-500">
+						Go to Search
+					</button>
 				</div>
 			{:else}
 				<div class="overflow-x-auto border border-neutral-800 bg-black">
@@ -650,6 +923,7 @@
 								<th class="px-4 py-3">Title</th>
 								<th class="px-4 py-3">Tracker</th>
 								<th class="px-4 py-3">Size</th>
+								<th class="px-4 py-3">Status</th>
 								<th class="px-4 py-3">Downloaded</th>
 								<th class="px-4 py-3"></th>
 							</tr>
@@ -671,23 +945,34 @@
 									</td>
 									<td class="px-4 py-4 text-neutral-300">{item.tracker || 'Unknown'}</td>
 									<td class="px-4 py-4 text-neutral-300">{formatBytes(item.size)}</td>
+									<td class="px-4 py-4 {getStatusColor(item.status)}">{getStatusLabel(item.status)}</td>
 									<td class="px-4 py-4 text-neutral-300">{formatDate(item.downloaded_at)}</td>
 									<td class="px-4 py-4">
-										{#if item.download_url}
-											<a
-												href={item.download_url}
-												download
-												class="inline-flex items-center justify-center text-white transition-colors hover:text-neutral-300"
-												aria-label="Re-download"
-												onclick={() => recordDownload(item)}
+										<div class="flex items-center gap-2">
+											{#if item.download_url}
+												<button
+													onclick={(e) => recordDownload(item, e)}
+													class="inline-flex items-center justify-center text-white transition-colors hover:text-neutral-300"
+													aria-label="Re-download"
+												>
+													<svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+														<path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+													</svg>
+												</button>
+											{:else}
+												<span class="text-xs uppercase tracking-[0.25em] text-neutral-600">N/A</span>
+											{/if}
+											<button
+												onclick={() => deleteHistoryItem(item.id)}
+												disabled={deletingHistoryId === item.id}
+												class="inline-flex items-center justify-center text-neutral-500 transition-colors hover:text-red-400"
+												aria-label="Delete"
 											>
-												<svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
-													<path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+												<svg class="h-4 w-4" viewBox="0 0 24 24" fill="currentColor">
+													<path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
 												</svg>
-											</a>
-										{:else}
-											<span class="text-xs uppercase tracking-[0.25em] text-neutral-600">N/A</span>
-										{/if}
+											</button>
+										</div>
 									</td>
 								</tr>
 							{/each}

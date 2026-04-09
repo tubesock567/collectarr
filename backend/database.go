@@ -75,6 +75,7 @@ CREATE TABLE IF NOT EXISTS torrent_download_history (
 	seeders INTEGER NOT NULL DEFAULT 0,
 	leechers INTEGER NOT NULL DEFAULT 0,
 	freeleech INTEGER NOT NULL DEFAULT 0,
+	status TEXT NOT NULL DEFAULT 'pending',
 	downloaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
 );`
 
@@ -155,6 +156,10 @@ func (s *Store) Init() error {
 	}
 	if _, err := s.db.Exec(`DELETE FROM settings WHERE key = 'hard_link_destination'`); err != nil {
 		return fmt.Errorf("remove retired hardlink setting: %w", err)
+	}
+
+	if err := s.migrateTorrentHistoryStatus(); err != nil {
+		return err
 	}
 
 	hasTitle, err := s.hasVideosColumn("title")
@@ -1960,9 +1965,9 @@ func (s *Store) GetPlaylistByIDMetaWithoutPrune(id int64) (PlaylistSummary, erro
 
 func (s *Store) AddTorrentDownloadHistory(item TorrentDownloadHistory) error {
 	_, err := s.db.Exec(`
-		INSERT INTO torrent_download_history (title, url, download_url, tracker, size, seeders, leechers, freeleech, downloaded_at)
-		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-		item.Title, item.URL, item.DownloadURL, item.Tracker, item.Size, item.Seeders, item.Leechers, item.Freeleech, item.DownloadedAt)
+		INSERT INTO torrent_download_history (title, url, download_url, tracker, size, seeders, leechers, freeleech, status, downloaded_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		item.Title, item.URL, item.DownloadURL, item.Tracker, item.Size, item.Seeders, item.Leechers, item.Freeleech, item.Status, item.DownloadedAt)
 	if err != nil {
 		return fmt.Errorf("add torrent download history: %w", err)
 	}
@@ -1970,6 +1975,51 @@ func (s *Store) AddTorrentDownloadHistory(item TorrentDownloadHistory) error {
 }
 
 func (s *Store) ListTorrentDownloadHistory(page, perPage int) ([]TorrentDownloadHistory, int, error) {
+	return s.ListTorrentDownloadHistoryFiltered("", "", page, perPage)
+}
+
+func (s *Store) ClearTorrentDownloadHistory() error {
+	_, err := s.db.Exec(`DELETE FROM torrent_download_history`)
+	if err != nil {
+		return fmt.Errorf("clear torrent download history: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) migrateTorrentHistoryStatus() error {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('torrent_download_history') WHERE name = 'status'`).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check torrent history status column: %w", err)
+	}
+	if count == 0 {
+		_, err := s.db.Exec(`ALTER TABLE torrent_download_history ADD COLUMN status TEXT NOT NULL DEFAULT 'pending'`)
+		if err != nil {
+			return fmt.Errorf("add status column to torrent history: %w", err)
+		}
+		if s.logger != nil {
+			s.logger.Info("migrated torrent history table", "added_column", "status")
+		}
+	}
+	return nil
+}
+
+func (s *Store) DeleteTorrentDownloadHistory(id int64) error {
+	result, err := s.db.Exec(`DELETE FROM torrent_download_history WHERE id = ?`, id)
+	if err != nil {
+		return fmt.Errorf("delete torrent download history: %w", err)
+	}
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("check deleted rows: %w", err)
+	}
+	if rowsAffected == 0 {
+		return sql.ErrNoRows
+	}
+	return nil
+}
+
+func (s *Store) ListTorrentDownloadHistoryFiltered(tracker, search string, page, perPage int) ([]TorrentDownloadHistory, int, error) {
 	if page < 1 {
 		page = 1
 	}
@@ -1980,20 +2030,37 @@ func (s *Store) ListTorrentDownloadHistory(page, perPage int) ([]TorrentDownload
 		perPage = 100
 	}
 
-	var totalCount int
-	err := s.db.QueryRow(`SELECT COUNT(*) FROM torrent_download_history`).Scan(&totalCount)
-	if err != nil {
-		return nil, 0, fmt.Errorf("count torrent history: %w", err)
+	whereClause := "1=1"
+	args := []any{}
+
+	if tracker != "" {
+		whereClause += " AND tracker = ?"
+		args = append(args, tracker)
+	}
+	if search != "" {
+		whereClause += " AND title LIKE ?"
+		args = append(args, "%"+search+"%")
 	}
 
-	offset := (page - 1) * perPage
-	rows, err := s.db.Query(`
-		SELECT id, title, url, download_url, tracker, size, seeders, leechers, freeleech, downloaded_at
-		FROM torrent_download_history
-		ORDER BY downloaded_at DESC
-		LIMIT ? OFFSET ?`, perPage, offset)
+	countQuery := `SELECT COUNT(*) FROM torrent_download_history WHERE ` + whereClause
+	var totalCount int
+	err := s.db.QueryRow(countQuery, args...).Scan(&totalCount)
 	if err != nil {
-		return nil, 0, fmt.Errorf("query torrent history: %w", err)
+		return nil, 0, fmt.Errorf("count filtered torrent history: %w", err)
+	}
+
+	queryArgs := append([]any{}, args...)
+	offset := (page - 1) * perPage
+	queryArgs = append(queryArgs, perPage, offset)
+
+	rows, err := s.db.Query(`
+		SELECT id, title, url, download_url, tracker, size, seeders, leechers, freeleech, status, downloaded_at
+		FROM torrent_download_history
+		WHERE `+whereClause+`
+		ORDER BY downloaded_at DESC
+		LIMIT ? OFFSET ?`, queryArgs...)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query filtered torrent history: %w", err)
 	}
 	defer rows.Close()
 
@@ -2001,7 +2068,7 @@ func (s *Store) ListTorrentDownloadHistory(page, perPage int) ([]TorrentDownload
 	for rows.Next() {
 		var item TorrentDownloadHistory
 		var downloadedAt sql.NullTime
-		err := rows.Scan(&item.ID, &item.Title, &item.URL, &item.DownloadURL, &item.Tracker, &item.Size, &item.Seeders, &item.Leechers, &item.Freeleech, &downloadedAt)
+		err := rows.Scan(&item.ID, &item.Title, &item.URL, &item.DownloadURL, &item.Tracker, &item.Size, &item.Seeders, &item.Leechers, &item.Freeleech, &item.Status, &downloadedAt)
 		if err != nil {
 			return nil, 0, fmt.Errorf("scan torrent history: %w", err)
 		}
@@ -2016,12 +2083,4 @@ func (s *Store) ListTorrentDownloadHistory(page, perPage int) ([]TorrentDownload
 	}
 
 	return items, totalCount, nil
-}
-
-func (s *Store) ClearTorrentDownloadHistory() error {
-	_, err := s.db.Exec(`DELETE FROM torrent_download_history`)
-	if err != nil {
-		return fmt.Errorf("clear torrent download history: %w", err)
-	}
-	return nil
 }

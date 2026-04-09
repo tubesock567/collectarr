@@ -98,6 +98,7 @@ func (api *API) Router() http.Handler {
 	authRouter.Handle("/torrents/history", api.authMiddleware(http.HandlerFunc(api.handleListTorrentDownloadHistory))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/torrents/history", api.authMiddleware(http.HandlerFunc(api.handleAddTorrentDownloadHistory))).Methods(http.MethodPost, http.MethodOptions)
 	authRouter.Handle("/torrents/history/clear", api.authMiddleware(http.HandlerFunc(api.handleClearTorrentDownloadHistory))).Methods(http.MethodPost, http.MethodOptions)
+	authRouter.Handle("/torrents/history/{id:[0-9]+}", api.authMiddleware(http.HandlerFunc(api.handleDeleteTorrentDownloadHistory))).Methods(http.MethodDelete, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/stream", api.authMiddleware(http.HandlerFunc(api.handleStreamVideo))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/thumbnail", api.authMiddleware(http.HandlerFunc(api.handleThumbnail))).Methods(http.MethodGet, http.MethodOptions)
 	authRouter.Handle("/video/{id:[0-9]+}/preview", api.authMiddleware(http.HandlerFunc(api.handlePreviewMetadata))).Methods(http.MethodGet, http.MethodOptions)

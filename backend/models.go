@@ -188,7 +188,15 @@ type TorrentDownloadHistory struct {
 	Seeders      int        `json:"seeders"`
 	Leechers     int        `json:"leechers"`
 	Freeleech    bool       `json:"freeleech"`
+	Status       string     `json:"status"`
 	DownloadedAt *time.Time `json:"downloaded_at"`
+}
+
+type TorrentHistoryFilterRequest struct {
+	Tracker string `json:"tracker"`
+	Search  string `json:"search"`
+	Page    int    `json:"page"`
+	PerPage int    `json:"per_page"`
 }
 
 type TorrentHistoryResponse struct {
