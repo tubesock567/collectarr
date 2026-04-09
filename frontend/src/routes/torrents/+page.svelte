@@ -496,22 +496,6 @@
 	function isMagnetUrl(url) {
 		return url?.startsWith('magnet:');
 	}
-
-	function getStatusColor(status) {
-		switch (status) {
-			case 'success': return 'text-emerald-400';
-			case 'failed': return 'text-red-400';
-			default: return 'text-amber-400';
-		}
-	}
-
-	function getStatusLabel(status) {
-		switch (status) {
-			case 'success': return 'Success';
-			case 'failed': return 'Failed';
-			default: return 'Pending';
-		}
-	}
 </script>
 
 <svelte:head>

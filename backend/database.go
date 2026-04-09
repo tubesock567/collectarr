@@ -2045,7 +2045,11 @@ func (s *Store) migrateVideosUniqueConstraint() error {
 		if err != nil {
 			return fmt.Errorf("begin videos migration: %w", err)
 		}
-		defer tx.Rollback()
+		defer func() {
+			if tx != nil {
+				_ = tx.Rollback()
+			}
+		}()
 
 		if _, err := tx.Exec(`ALTER TABLE videos RENAME TO videos_old`); err != nil {
 			return fmt.Errorf("rename videos table: %w", err)
@@ -2074,6 +2078,7 @@ func (s *Store) migrateVideosUniqueConstraint() error {
 		if err := tx.Commit(); err != nil {
 			return fmt.Errorf("commit videos migration: %w", err)
 		}
+		tx = nil
 
 		if s.logger != nil {
 			s.logger.Info("migrated videos table", "changed", "UNIQUE from filename to path")
