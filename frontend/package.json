@@ -6,7 +6,11 @@
   "scripts": {
     "build": "vite build",
     "dev": "vite dev",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint . --ext .js,.svelte",
+    "lint:fix": "eslint . --ext .js,.svelte --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "devDependencies": {
     "@sveltejs/adapter-static": "^3.0.8",
@@ -14,7 +18,11 @@
     "@sveltejs/vite-plugin-svelte": "^5.1.1",
     "autoprefixer": "^10.4.27",
     "daisyui": "^5.5.19",
+    "eslint": "^9.0.0",
+    "eslint-plugin-svelte": "^2.35.0",
     "postcss": "^8.5.8",
+    "prettier": "^3.2.0",
+    "prettier-plugin-svelte": "^3.2.0",
     "svelte": "^5.0.0",
     "tailwindcss": "^3.4.19",
     "vite": "^6.4.1"
