@@ -594,10 +594,10 @@
 				{/if}
 
 				{#if warnings.length > 0}
-					<div class="mt-4 space-y-2 border border-amber-900 bg-amber-950/20 p-4 text-xs text-amber-300">
+					<div class="mt-4 space-y-2 border border-amber-600 bg-amber-100/50 p-4 text-xs text-amber-900">
 						<div class="flex items-center justify-between">
-							<p class="uppercase tracking-[0.25em] text-amber-400">Indexer warnings ({warnings.length})</p>
-							<button onclick={searchTorrents} class="text-[10px] uppercase tracking-widest text-amber-400 hover:text-white">Retry</button>
+<p class="uppercase tracking-[0.25em] text-amber-900">Indexer warnings ({warnings.length})</p>
+						<button onclick={searchTorrents} class="text-[10px] uppercase tracking-widest text-amber-900 hover:text-black">Retry</button>
 						</div>
 						{#each warnings as warning}
 							<p>{warning}</p>
@@ -666,19 +666,19 @@
 														<p class="font-medium leading-6">{result.title || 'Untitled torrent'}</p>
 													{/if}
 													{#if result.freeleech}
-														<span class="inline-flex border border-emerald-800 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-emerald-300">Freeleech</span>
+<span class="inline-flex border border-emerald-700 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-emerald-900">Freeleech</span>
 													{/if}
 													{#if isMagnetUrl(result.download_url)}
-														<span class="inline-flex border border-purple-800 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-purple-300">Magnet</span>
+														<span class="inline-flex border border-purple-700 bg-purple-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-purple-900">Magnet</span>
 													{:else}
-														<span class="inline-flex border border-blue-800 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-blue-300">Torrent</span>
+														<span class="inline-flex border border-blue-700 bg-blue-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-blue-900">Torrent</span>
 													{/if}
 												</div>
 											</div>
 										</td>
 										<td class="px-4 py-4 text-neutral-300">{result.tracker || 'Unknown'}</td>
 										<td class="px-4 py-4 text-neutral-300">{formatBytes(result.size)}</td>
-										<td class="px-4 py-4 {result.seeders >= 50 ? 'text-emerald-400 font-semibold' : result.seeders >= 20 ? 'text-blue-400' : 'text-neutral-300'}">{result.seeders ?? 0}</td>
+										<td class="px-4 py-4 {result.seeders >= 50 ? 'text-emerald-700 font-semibold' : result.seeders >= 20 ? 'text-blue-700' : 'text-neutral-700'}">{result.seeders ?? 0}</td>
 										<td class="px-4 py-4 text-neutral-300">{result.leechers ?? 0}</td>
 										<td class="px-4 py-4 text-neutral-300" title={result.published ? formatDate(result.published) : ''}>{result.published ? formatRelativeTime(result.published) : 'Unknown'}</td>
 										<td class="px-4 py-4">
@@ -878,7 +878,7 @@
 												<p class="font-medium leading-6">{item.title || 'Untitled torrent'}</p>
 											{/if}
 											{#if item.freeleech}
-												<span class="inline-flex border border-emerald-800 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-emerald-300">Freeleech</span>
+												<span class="inline-flex border border-emerald-700 bg-emerald-50 px-2 py-0.5 text-[10px] uppercase tracking-[0.25em] text-emerald-900">Freeleech</span>
 											{/if}
 										</div>
 									</td>
