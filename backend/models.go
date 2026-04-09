@@ -266,3 +266,25 @@ type PlaylistItemsRequest struct {
 type errorResponse struct {
 	Error string `json:"error"`
 }
+
+type WatchProgress struct {
+	ID        int64      `json:"id"`
+	VideoID   int64      `json:"video_id"`
+	Position  int        `json:"position"`
+	Duration  int        `json:"duration"`
+	WatchedAt *time.Time `json:"watched_at,omitempty"`
+}
+
+type WatchProgressRequest struct {
+	Position int `json:"position"`
+	Duration int `json:"duration"`
+}
+
+type WatchProgressResponse struct {
+	VideoID      int64   `json:"video_id"`
+	Title        string  `json:"title"`
+	Position     int     `json:"position"`
+	Duration     int     `json:"duration"`
+	ProgressPct  float64 `json:"progress_pct"`
+	ThumbnailURL string  `json:"thumbnail_url,omitempty"`
+}

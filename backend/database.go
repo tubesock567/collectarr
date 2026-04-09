@@ -82,6 +82,20 @@ CREATE TABLE IF NOT EXISTS torrent_download_history (
 
 const createTorrentHistoryDownloadedAtIndexSQL = `CREATE INDEX IF NOT EXISTS idx_torrent_history_downloaded_at ON torrent_download_history(downloaded_at DESC);`
 
+const createWatchProgressTableSQL = `
+CREATE TABLE IF NOT EXISTS watch_progress (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	video_id INTEGER NOT NULL,
+	position INTEGER NOT NULL DEFAULT 0,
+	duration INTEGER NOT NULL DEFAULT 0,
+	watched_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+	FOREIGN KEY (video_id) REFERENCES videos(id) ON DELETE CASCADE,
+	UNIQUE(video_id)
+);`
+
+const createWatchProgressVideoIndexSQL = `CREATE INDEX IF NOT EXISTS idx_watch_progress_video ON watch_progress(video_id);`
+const createWatchProgressWatchedAtIndexSQL = `CREATE INDEX IF NOT EXISTS idx_watch_progress_watched_at ON watch_progress(watched_at DESC);`
+
 const mediaPathSettingKey = "media_path"
 const generateThumbnailsSettingKey = "generate_thumbnails"
 const generateScrubberSpritesSettingKey = "generate_scrubber_sprites"
@@ -154,6 +168,15 @@ func (s *Store) Init() error {
 	}
 	if _, err := s.db.Exec(createTorrentHistoryDownloadedAtIndexSQL); err != nil {
 		return fmt.Errorf("create torrent history index: %w", err)
+	}
+	if _, err := s.db.Exec(createWatchProgressTableSQL); err != nil {
+		return fmt.Errorf("create watch progress table: %w", err)
+	}
+	if _, err := s.db.Exec(createWatchProgressVideoIndexSQL); err != nil {
+		return fmt.Errorf("create watch progress video index: %w", err)
+	}
+	if _, err := s.db.Exec(createWatchProgressWatchedAtIndexSQL); err != nil {
+		return fmt.Errorf("create watch progress watched_at index: %w", err)
 	}
 	if _, err := s.db.Exec(`DELETE FROM settings WHERE key = 'hard_link_destination'`); err != nil {
 		return fmt.Errorf("remove retired hardlink setting: %w", err)
@@ -2167,4 +2190,87 @@ func (s *Store) ListTorrentDownloadHistoryFiltered(tracker, search string, page,
 	}
 
 	return items, totalCount, nil
+}
+
+func (s *Store) SaveWatchProgress(videoID int64, position, duration int) error {
+	_, err := s.db.Exec(`
+		INSERT INTO watch_progress (video_id, position, duration, watched_at)
+		VALUES (?, ?, ?, CURRENT_TIMESTAMP)
+		ON CONFLICT(video_id) DO UPDATE SET
+			position = excluded.position,
+			duration = excluded.duration,
+			watched_at = excluded.watched_at`,
+		videoID, position, duration)
+	if err != nil {
+		return fmt.Errorf("save watch progress: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) GetWatchProgress(videoID int64) (WatchProgress, error) {
+	var progress WatchProgress
+	var watchedAt sql.NullTime
+	err := s.db.QueryRow(`
+		SELECT id, video_id, position, duration, watched_at
+		FROM watch_progress
+		WHERE video_id = ?`, videoID).Scan(
+		&progress.ID, &progress.VideoID, &progress.Position, &progress.Duration, &watchedAt)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return WatchProgress{}, nil
+		}
+		return WatchProgress{}, fmt.Errorf("get watch progress: %w", err)
+	}
+	if watchedAt.Valid {
+		progress.WatchedAt = &watchedAt.Time
+	}
+	return progress, nil
+}
+
+func (s *Store) ListContinueWatching(limit int) ([]WatchProgressResponse, error) {
+	if limit < 1 {
+		limit = 10
+	}
+	if limit > 50 {
+		limit = 50
+	}
+
+	rows, err := s.db.Query(`
+		SELECT 
+			wp.video_id,
+			v.title,
+			wp.position,
+			wp.duration,
+			v.duration as video_duration
+		FROM watch_progress wp
+		JOIN videos v ON v.id = wp.video_id
+		WHERE wp.duration > 0
+			AND (CAST(wp.position AS FLOAT) / CAST(wp.duration AS FLOAT)) BETWEEN 0.05 AND 0.95
+		ORDER BY wp.watched_at DESC
+		LIMIT ?`, limit)
+	if err != nil {
+		return nil, fmt.Errorf("list continue watching: %w", err)
+	}
+	defer rows.Close()
+
+	var items []WatchProgressResponse
+	for rows.Next() {
+		var item WatchProgressResponse
+		var videoDuration int
+		err := rows.Scan(&item.VideoID, &item.Title, &item.Position, &item.Duration, &videoDuration)
+		if err != nil {
+			return nil, fmt.Errorf("scan continue watching: %w", err)
+		}
+
+		if item.Duration > 0 {
+			item.ProgressPct = float64(item.Position) / float64(item.Duration) * 100
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("iterate continue watching: %w", err)
+	}
+
+	return items, nil
 }

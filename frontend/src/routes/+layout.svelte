@@ -7,6 +7,7 @@
 	import { auth, checkAuth, logout } from '$lib/auth';
 	import { preferences } from '$lib/preferences';
 	import { theme } from '$lib/theme';
+	import Toast from '$lib/components/Toast.svelte';
 
 	let { children } = $props();
 	let showMobileNav = $state(false);
@@ -417,6 +418,8 @@
 		</div>
 	</nav>
 {/if}
+
+<Toast />
 
 <main class="min-h-screen bg-black text-white w-full">
 	{#if !$auth.loading || $page.url.pathname === '/login'}
