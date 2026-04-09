@@ -348,10 +348,10 @@ func parseTorznabResults(indexer TorrentIndexer, body []byte) ([]TorrentSearchRe
 		}
 
 		detailsURL := firstNonEmptyURL(
-			pickURLByScheme(item.Comments, "http", "https"),
-			pickNonMagnetURL(item.Description),
 			pickNonMagnetURL(item.GUID),
 			pickNonMagnetURL(item.Link),
+			pickURLByScheme(item.Comments, "http", "https"),
+			pickNonMagnetURL(item.Description),
 		)
 		downloadURL := firstNonEmptyURL(
 			firstAttrValue(attrValues, "magneturl"),
