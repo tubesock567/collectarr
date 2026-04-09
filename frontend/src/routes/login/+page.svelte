@@ -2,14 +2,18 @@
 	import { goto } from '$app/navigation';
 	import { auth, login } from '$lib/auth';
 
-	let username = $state('admin');
-	let password = $state('admin');
+	let username = $state('');
+	let password = $state('');
 	let submitting = $state(false);
 	let error = $state('');
 
 	$effect(() => {
 		if ($auth.isAuthenticated) {
-			goto('/');
+			if ($auth.forcePasswordChange) {
+				goto('/change-password');
+			} else {
+				goto('/');
+			}
 		}
 	});
 
@@ -21,8 +25,12 @@
 		error = '';
 
 		try {
-			await login(username.trim(), password);
-			goto('/');
+			const data = await login(username.trim(), password);
+			if (data.force_password_change) {
+				goto('/change-password');
+			} else {
+				goto('/');
+			}
 		} catch (err) {
 			error = err.message;
 		} finally {
@@ -40,7 +48,6 @@
 		<div class="space-y-2">
 			<p class="text-xs uppercase tracking-[0.3em] text-neutral-500">Collectarr</p>
 			<h1 class="text-2xl font-bold uppercase tracking-widest">Login</h1>
-			<p class="text-sm text-neutral-500">Use the default admin/admin account to get started.</p>
 		</div>
 
 		<label class="block space-y-2">

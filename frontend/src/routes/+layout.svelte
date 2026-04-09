@@ -123,7 +123,17 @@
 		}
 
 		if ($auth.isAuthenticated && pathname === '/login') {
-			goto('/');
+			if ($auth.forcePasswordChange) {
+				goto('/change-password');
+			} else {
+				goto('/');
+			}
+			return;
+		}
+
+		if ($auth.isAuthenticated && $auth.forcePasswordChange && pathname !== '/change-password') {
+			goto('/change-password');
+			return;
 		}
 	});
 

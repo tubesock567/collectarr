@@ -35,7 +35,8 @@ const createUsersTableSQL = `
 CREATE TABLE IF NOT EXISTS users (
 	id INTEGER PRIMARY KEY AUTOINCREMENT,
 	username TEXT NOT NULL UNIQUE,
-	password_hash TEXT NOT NULL
+	password_hash TEXT NOT NULL,
+	force_password_change INTEGER NOT NULL DEFAULT 0
 );`
 
 const createSettingsTableSQL = `
@@ -162,6 +163,10 @@ func (s *Store) Init() error {
 		return err
 	}
 
+	if err := s.migrateUserForcePasswordChange(); err != nil {
+		return err
+	}
+
 	hasTitle, err := s.hasVideosColumn("title")
 	if err != nil {
 		return err
@@ -228,19 +233,21 @@ func (s *Store) Init() error {
 
 func (s *Store) GetUserByUsername(username string) (User, error) {
 	var user User
-	err := s.db.QueryRow(`SELECT id, username, password_hash FROM users WHERE username = ?`, username).Scan(&user.ID, &user.Username, &user.Password)
+	var forceChange int
+	err := s.db.QueryRow(`SELECT id, username, password_hash, force_password_change FROM users WHERE username = ?`, username).Scan(&user.ID, &user.Username, &user.Password, &forceChange)
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return User{}, err
 		}
 		return User{}, fmt.Errorf("get user by username: %w", err)
 	}
+	user.ForcePasswordChange = forceChange != 0
 
 	return user, nil
 }
 
 func (s *Store) UpdatePassword(username string, newHash string) error {
-	result, err := s.db.Exec(`UPDATE users SET password_hash = ? WHERE username = ?`, newHash, username)
+	result, err := s.db.Exec(`UPDATE users SET password_hash = ?, force_password_change = 0 WHERE username = ?`, newHash, username)
 	if err != nil {
 		return fmt.Errorf("update password: %w", err)
 	}
@@ -270,7 +277,7 @@ func (s *Store) CreateDefaultUser() error {
 		return fmt.Errorf("hash default password: %w", err)
 	}
 
-	if _, err := s.db.Exec(`INSERT INTO users (username, password_hash) VALUES (?, ?)`, "admin", hash); err != nil {
+	if _, err := s.db.Exec(`INSERT INTO users (username, password_hash, force_password_change) VALUES (?, ?, 1)`, "admin", hash); err != nil {
 		return fmt.Errorf("create default user: %w", err)
 	}
 
@@ -1999,6 +2006,24 @@ func (s *Store) migrateTorrentHistoryStatus() error {
 		}
 		if s.logger != nil {
 			s.logger.Info("migrated torrent history table", "added_column", "status")
+		}
+	}
+	return nil
+}
+
+func (s *Store) migrateUserForcePasswordChange() error {
+	var count int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM pragma_table_info('users') WHERE name = 'force_password_change'`).Scan(&count)
+	if err != nil {
+		return fmt.Errorf("check users force_password_change column: %w", err)
+	}
+	if count == 0 {
+		_, err := s.db.Exec(`ALTER TABLE users ADD COLUMN force_password_change INTEGER NOT NULL DEFAULT 0`)
+		if err != nil {
+			return fmt.Errorf("add force_password_change column to users: %w", err)
+		}
+		if s.logger != nil {
+			s.logger.Info("migrated users table", "added_column", "force_password_change")
 		}
 	}
 	return nil

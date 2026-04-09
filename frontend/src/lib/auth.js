@@ -67,6 +67,7 @@ export async function login(username, password) {
 	auth.set({
 		isAuthenticated: true,
 		username: data.username,
+		forcePasswordChange: data.force_password_change,
 		loading: false
 	});
 

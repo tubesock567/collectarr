@@ -48,9 +48,10 @@ type ScanReport struct {
 }
 
 type User struct {
-	ID       int64  `json:"id"`
-	Username string `json:"username"`
-	Password string `json:"-"`
+	ID                  int64  `json:"id"`
+	Username            string `json:"username"`
+	Password            string `json:"-"`
+	ForcePasswordChange bool   `json:"force_password_change"`
 }
 
 type LoginRequest struct {
