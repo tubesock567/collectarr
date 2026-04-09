@@ -44,7 +44,10 @@
 </svelte:head>
 
 <div class="min-h-screen flex items-center justify-center px-4">
-	<form class="w-full max-w-md border border-neutral-800 bg-neutral-950 p-8 space-y-6" onsubmit={submitLogin}>
+	<form
+		class="w-full max-w-md border border-neutral-800 bg-neutral-950 p-8 space-y-6"
+		onsubmit={submitLogin}
+	>
 		<div class="space-y-2">
 			<p class="text-xs uppercase tracking-[0.3em] text-neutral-500">Collectarr</p>
 			<h1 class="text-2xl font-bold uppercase tracking-widest">Login</h1>

@@ -3,10 +3,10 @@
 @tailwind utilities;
 
 @layer base {
-  body {
-    background-color: #000;
-    color: #fff;
-  }
+	body {
+		background-color: #000;
+		color: #fff;
+	}
 }
 
 :root.theme-light body {
@@ -85,8 +85,8 @@
 }
 
 :root.theme-light [class~='from-black/90'] {
-	--tw-gradient-from: rgba(255,255,255,0.9) var(--tw-gradient-from-position) !important;
-	--tw-gradient-to: rgba(255,255,255,0) var(--tw-gradient-to-position) !important;
+	--tw-gradient-from: rgba(255, 255, 255, 0.9) var(--tw-gradient-from-position) !important;
+	--tw-gradient-to: rgba(255, 255, 255, 0) var(--tw-gradient-to-position) !important;
 	--tw-gradient-stops: var(--tw-gradient-from), var(--tw-gradient-to) !important;
 }
 

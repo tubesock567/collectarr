@@ -1,7 +1,7 @@
 <script>
 	import { authFetch } from '$lib/auth';
 
-	let { 
+	let {
 		isOpen = $bindable(false),
 		onSelect = () => {},
 		onCancel = () => {},
@@ -22,9 +22,7 @@
 	}
 
 	function splitPath(path) {
-		return normalizePath(path)
-			.split('/')
-			.filter(Boolean);
+		return normalizePath(path).split('/').filter(Boolean);
 	}
 
 	function joinPath(base, name) {
@@ -52,7 +50,8 @@
 
 		let accumulated = normalized.startsWith('/') ? '/' : '';
 		for (const part of parts) {
-			accumulated = accumulated === '/' ? `/${part}` : accumulated ? `${accumulated}/${part}` : part;
+			accumulated =
+				accumulated === '/' ? `/${part}` : accumulated ? `${accumulated}/${part}` : part;
 			breadcrumbs.push({ label: part, path: accumulated });
 		}
 
@@ -76,11 +75,17 @@
 		message = '';
 
 		try {
-			const res = await authFetch(`/api/directory?path=${encodeURIComponent(path)}`, { method: 'GET' });
+			const res = await authFetch(`/api/directory?path=${encodeURIComponent(path)}`, {
+				method: 'GET'
+			});
 			if (!res.ok) throw new Error(await readError(res, 'Failed to load directory'));
 
 			const data = await res.json();
-			const rawEntries = Array.isArray(data) ? data : Array.isArray(data?.entries) ? data.entries : [];
+			const rawEntries = Array.isArray(data)
+				? data
+				: Array.isArray(data?.entries)
+					? data.entries
+					: [];
 			const nextEntries = rawEntries
 				.map((entry) => ({
 					name: entry?.name || entry?.filename || '',
@@ -133,9 +138,11 @@
 {#if isOpen}
 	<!-- svelte-ignore a11y_click_events_have_key_events -->
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
-	<div 
+	<div
 		class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
-		onclick={(e) => { if (e.target === e.currentTarget) cancel(); }}
+		onclick={(e) => {
+			if (e.target === e.currentTarget) cancel();
+		}}
 	>
 		<div class="bg-black border border-neutral-800 w-full max-w-2xl max-h-[80vh] flex flex-col">
 			<div class="border-b border-neutral-800 p-4">
@@ -179,7 +186,9 @@
 						{/if}
 
 						{#if entries.length === 0}
-							<div class="px-6 py-8 text-center text-sm text-neutral-500">No directories found.</div>
+							<div class="px-6 py-8 text-center text-sm text-neutral-500">
+								No directories found.
+							</div>
 						{:else}
 							{#each entries as entry (entry.path)}
 								<button
@@ -198,7 +207,11 @@
 
 			{#if message}
 				<div class="px-4 py-2 border-t border-neutral-800">
-					<p class="text-xs tracking-wide {message.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'}">
+					<p
+						class="text-xs tracking-wide {message.startsWith('Error')
+							? 'text-red-500'
+							: 'text-neutral-400'}"
+					>
 						{message}
 					</p>
 				</div>

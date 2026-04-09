@@ -17,7 +17,9 @@
 
 	const normalizedInput = $derived(inputValue.trim().toLowerCase());
 	const normalizedValues = $derived(values.map((value) => value.toLowerCase()));
-	const normalizedExcludedValues = $derived((excludeValues || []).map((value) => value.toLowerCase()));
+	const normalizedExcludedValues = $derived(
+		(excludeValues || []).map((value) => value.toLowerCase())
+	);
 	const filteredSuggestions = $derived.by(() => {
 		const selectedSet = new Set(normalizedValues);
 		const excludedSet = new Set(normalizedExcludedValues);
@@ -46,7 +48,9 @@
 			return '';
 		}
 
-		const existingSuggestion = (suggestions || []).find((suggestion) => suggestion.toLowerCase() === trimmed.toLowerCase());
+		const existingSuggestion = (suggestions || []).find(
+			(suggestion) => suggestion.toLowerCase() === trimmed.toLowerCase()
+		);
 		const existingValue = values.find((value) => value.toLowerCase() === trimmed.toLowerCase());
 		return existingSuggestion || existingValue || trimmed;
 	}
@@ -111,13 +115,15 @@
 
 		if (event.key === 'ArrowDown' && filteredSuggestions.length > 0) {
 			event.preventDefault();
-			activeSuggestionIndex = activeSuggestionIndex < filteredSuggestions.length - 1 ? activeSuggestionIndex + 1 : 0;
+			activeSuggestionIndex =
+				activeSuggestionIndex < filteredSuggestions.length - 1 ? activeSuggestionIndex + 1 : 0;
 			return;
 		}
 
 		if (event.key === 'ArrowUp' && filteredSuggestions.length > 0) {
 			event.preventDefault();
-			activeSuggestionIndex = activeSuggestionIndex > 0 ? activeSuggestionIndex - 1 : filteredSuggestions.length - 1;
+			activeSuggestionIndex =
+				activeSuggestionIndex > 0 ? activeSuggestionIndex - 1 : filteredSuggestions.length - 1;
 			return;
 		}
 
@@ -130,16 +136,20 @@
 <div>
 	<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-400">{label}</p>
 	<div class="relative mt-3">
-		<div class="min-h-[3.25rem] border border-neutral-700 bg-black px-3 py-3 text-sm text-white transition-colors focus-within:border-neutral-400">
+		<div
+			class="min-h-[3.25rem] border border-neutral-700 bg-black px-3 py-3 text-sm text-white transition-colors focus-within:border-neutral-400"
+		>
 			<div class="flex flex-wrap items-center gap-2">
 				{#each values as value (value)}
-					<span class="inline-flex items-center gap-2 border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-white">
+					<span
+						class="inline-flex items-center gap-2 border border-neutral-700 bg-neutral-900 px-2 py-1 text-xs text-white"
+					>
 						<span>{value}</span>
 						<button
 							type="button"
 							class="text-neutral-400 transition-colors hover:text-white disabled:cursor-not-allowed"
 							onclick={() => removeValue(value)}
-							disabled={disabled}
+							{disabled}
 							aria-label={`Remove ${value}`}
 						>
 							×
@@ -152,24 +162,29 @@
 					value={inputValue}
 					oninput={handleInput}
 					onkeydown={handleKeydown}
-					onfocus={() => inputFocused = true}
+					onfocus={() => (inputFocused = true)}
 					onblur={() => {
 						inputFocused = false;
 						activeSuggestionIndex = -1;
 					}}
-					placeholder={placeholder}
-					disabled={disabled}
+					{placeholder}
+					{disabled}
 					class="min-w-[10rem] flex-1 bg-transparent text-sm text-white outline-none placeholder:text-neutral-600 disabled:cursor-not-allowed"
 				/>
 			</div>
 		</div>
 
 		{#if showSuggestions}
-			<div class="absolute left-0 right-0 top-full z-20 mt-2 border border-neutral-700 bg-black shadow-2xl">
+			<div
+				class="absolute left-0 right-0 top-full z-20 mt-2 border border-neutral-700 bg-black shadow-2xl"
+			>
 				{#each filteredSuggestions as suggestion, index (suggestion)}
 					<button
 						type="button"
-						class="block w-full px-3 py-2 text-left text-sm transition-colors {index === activeSuggestionIndex ? 'bg-neutral-900 text-white' : 'text-neutral-300 hover:bg-neutral-900 hover:text-white'}"
+						class="block w-full px-3 py-2 text-left text-sm transition-colors {index ===
+						activeSuggestionIndex
+							? 'bg-neutral-900 text-white'
+							: 'text-neutral-300 hover:bg-neutral-900 hover:text-white'}"
 						onmousedown={(event) => event.preventDefault()}
 						onclick={() => addValue(suggestion)}
 					>

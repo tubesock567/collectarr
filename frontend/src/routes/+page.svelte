@@ -91,13 +91,19 @@
 	const selectedVideos = $derived(videos.filter((video) => selectedVideoIds.includes(video.id)));
 	const selectedCount = $derived(selectedVideoIds.length);
 	const singleSelectedVideo = $derived(selectedCount === 1 ? selectedVideos[0] || null : null);
-	const allPageSelected = $derived(paginatedVideos.length > 0 && paginatedVideos.every((video) => selectedVideoIds.includes(video.id)));
-	const allFilteredSelected = $derived(filteredVideos.length > 0 && filteredVideos.every((video) => selectedVideoIds.includes(video.id)));
+	const allPageSelected = $derived(
+		paginatedVideos.length > 0 &&
+			paginatedVideos.every((video) => selectedVideoIds.includes(video.id))
+	);
+	const allFilteredSelected = $derived(
+		filteredVideos.length > 0 &&
+			filteredVideos.every((video) => selectedVideoIds.includes(video.id))
+	);
 	const bulkHasChanges = $derived(
 		bulkAddTags.length > 0 ||
-		bulkRemoveTags.length > 0 ||
-		bulkAddActors.length > 0 ||
-		bulkRemoveActors.length > 0
+			bulkRemoveTags.length > 0 ||
+			bulkAddActors.length > 0 ||
+			bulkRemoveActors.length > 0
 	);
 
 	function setSort(field) {
@@ -149,8 +155,7 @@
 
 	function handleClickOutside(event) {
 		const insideSortDropdown =
-			mobileSortDropdownEl?.contains(event.target) ||
-			desktopSortDropdownEl?.contains(event.target);
+			mobileSortDropdownEl?.contains(event.target) || desktopSortDropdownEl?.contains(event.target);
 		if (!insideSortDropdown) {
 			showSortDropdown = false;
 		}
@@ -356,9 +361,15 @@
 			if (!res.ok) throw new Error(await readError(res, 'Failed to add to playlist'));
 			const playlist = await res.json();
 			const addedCount = Math.max((playlist?.items?.length || 0) - previousCount, 0);
-			playlistMessage = addedCount > 0 ? `Added ${addedCount} ${addedCount === 1 ? 'item' : 'items'} to playlist.` : 'All selected items were already in that playlist.';
+			playlistMessage =
+				addedCount > 0
+					? `Added ${addedCount} ${addedCount === 1 ? 'item' : 'items'} to playlist.`
+					: 'All selected items were already in that playlist.';
 			await loadPlaylists();
-			setTimeout(() => { showPlaylistPanel = false; clearSelection(); }, 1500);
+			setTimeout(() => {
+				showPlaylistPanel = false;
+				clearSelection();
+			}, 1500);
 		} catch (err) {
 			playlistMessage = err.message;
 		} finally {
@@ -373,14 +384,21 @@
 		try {
 			const res = await authFetch('/api/playlists', {
 				method: 'POST',
-				body: JSON.stringify({ name: newPlaylistName, description: '', video_ids: selectedVideoIds })
+				body: JSON.stringify({
+					name: newPlaylistName,
+					description: '',
+					video_ids: selectedVideoIds
+				})
 			});
 			if (!res.ok) throw new Error(await readError(res, 'Failed to create playlist'));
 			const playlist = await res.json();
 			playlistMessage = `Playlist created with ${playlist?.items?.length || 0} ${(playlist?.items?.length || 0) === 1 ? 'item' : 'items'}.`;
 			await loadPlaylists();
 			newPlaylistName = '';
-			setTimeout(() => { showPlaylistPanel = false; clearSelection(); }, 1500);
+			setTimeout(() => {
+				showPlaylistPanel = false;
+				clearSelection();
+			}, 1500);
 		} catch (err) {
 			playlistMessage = err.message;
 		} finally {
@@ -508,8 +526,13 @@
 <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
 	<div class="mb-6 flex flex-col gap-3">
 		<div class="sm:hidden flex flex-col gap-3">
-			<label class="flex h-9 w-full items-center self-stretch overflow-hidden border border-neutral-600 bg-neutral-900 text-white transition-colors focus-within:border-neutral-400">
-				<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-400 border-r border-neutral-600 h-full flex items-center shrink-0">Search</span>
+			<label
+				class="flex h-9 w-full items-center self-stretch overflow-hidden border border-neutral-600 bg-neutral-900 text-white transition-colors focus-within:border-neutral-400"
+			>
+				<span
+					class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-400 border-r border-neutral-600 h-full flex items-center shrink-0"
+					>Search</span
+				>
 				<input
 					type="search"
 					value={searchQuery}
@@ -527,33 +550,62 @@
 					onclick={() => loadVideos()}
 					disabled={loading}
 				>
-					<svg class="w-5 h-5" class:animate-spin-full={isSpinning} viewBox="0 0 24 24" fill="currentColor">
-						<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+					<svg
+						class="w-5 h-5"
+						class:animate-spin-full={isSpinning}
+						viewBox="0 0 24 24"
+						fill="currentColor"
+					>
+						<path
+							d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+						/>
 					</svg>
 				</button>
 
 				<div class="relative min-w-0" bind:this={mobileSortDropdownEl}>
 					<button
 						class="flex h-9 w-full items-center justify-center gap-2 border border-neutral-600 bg-neutral-900 px-3 text-[10px] uppercase tracking-[0.25em] text-white transition-colors hover:border-neutral-400"
-						onclick={() => showSortDropdown = !showSortDropdown}
+						onclick={() => (showSortDropdown = !showSortDropdown)}
 						aria-label="Sort options"
 					>
 						<span class="truncate">{getSortLabel()}</span>
 						<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M7 10l5 5 5-5z"/>
+							<path d="M7 10l5 5 5-5z" />
 						</svg>
 					</button>
 					{#if showSortDropdown}
-						<div class="absolute left-0 top-full z-20 mt-1 w-full min-w-40 border border-neutral-600 bg-black shadow-xl">
-							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'dateAdded' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('dateAdded')}>Date added</button>
-							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'duration' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('duration')}>Duration</button>
-							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'alphabetical' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('alphabetical')}>Alphabetical</button>
+						<div
+							class="absolute left-0 top-full z-20 mt-1 w-full min-w-40 border border-neutral-600 bg-black shadow-xl"
+						>
+							<button
+								class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy ===
+								'dateAdded'
+									? 'text-white bg-neutral-900'
+									: 'text-neutral-300'}"
+								onclick={() => setSort('dateAdded')}>Date added</button
+							>
+							<button
+								class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy ===
+								'duration'
+									? 'text-white bg-neutral-900'
+									: 'text-neutral-300'}"
+								onclick={() => setSort('duration')}>Duration</button
+							>
+							<button
+								class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy ===
+								'alphabetical'
+									? 'text-white bg-neutral-900'
+									: 'text-neutral-300'}"
+								onclick={() => setSort('alphabetical')}>Alphabetical</button
+							>
 						</div>
 					{/if}
 				</div>
 
 				<button
-					class="h-9 min-w-0 px-3 text-[10px] uppercase tracking-[0.25em] border transition-colors {selectionMode ? 'border-white bg-white text-black' : 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}"
+					class="h-9 min-w-0 px-3 text-[10px] uppercase tracking-[0.25em] border transition-colors {selectionMode
+						? 'border-white bg-white text-black'
+						: 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}"
 					onclick={toggleSelectionMode}
 					aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
 				>
@@ -569,14 +621,26 @@
 				onclick={() => loadVideos()}
 				disabled={loading}
 			>
-				<svg class="w-5 h-5" class:animate-spin-full={isSpinning} viewBox="0 0 24 24" fill="currentColor">
-					<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+				<svg
+					class="w-5 h-5"
+					class:animate-spin-full={isSpinning}
+					viewBox="0 0 24 24"
+					fill="currentColor"
+				>
+					<path
+						d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+					/>
 				</svg>
 			</button>
 
 			<div class="flex items-center gap-3 min-w-0 flex-1 justify-end">
-				<label class="flex h-9 w-full items-center self-stretch overflow-hidden border border-neutral-600 bg-neutral-900 text-white transition-colors focus-within:border-neutral-400 sm:w-[28rem] sm:self-auto lg:w-[34rem]">
-					<span class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-400 border-r border-neutral-600 h-full flex items-center shrink-0">Search</span>
+				<label
+					class="flex h-9 w-full items-center self-stretch overflow-hidden border border-neutral-600 bg-neutral-900 text-white transition-colors focus-within:border-neutral-400 sm:w-[28rem] sm:self-auto lg:w-[34rem]"
+				>
+					<span
+						class="px-3 text-[10px] uppercase tracking-[0.25em] text-neutral-400 border-r border-neutral-600 h-full flex items-center shrink-0"
+						>Search</span
+					>
 					<input
 						type="search"
 						value={searchQuery}
@@ -590,7 +654,7 @@
 				<div class="relative flex-1 sm:flex-none" bind:this={desktopSortDropdownEl}>
 					<button
 						class="w-full flex items-center justify-center sm:justify-start gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 hover:border-neutral-400 transition-colors text-white bg-neutral-900"
-						onclick={() => showSortDropdown = !showSortDropdown}
+						onclick={() => (showSortDropdown = !showSortDropdown)}
 						aria-label="Sort options"
 					>
 						<span>Sort: {getSortLabel()}</span>
@@ -613,21 +677,41 @@
 						>
 							<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
 								{#if sortOrder === 'asc'}
-									<path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z"/>
+									<path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z" />
 								{:else}
-									<path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"/>
+									<path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z" />
 								{/if}
 							</svg>
 						</span>
 						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M7 10l5 5 5-5z"/>
+							<path d="M7 10l5 5 5-5z" />
 						</svg>
 					</button>
 					{#if showSortDropdown}
-						<div class="absolute top-full left-0 mt-1 w-40 bg-black border border-neutral-600 shadow-xl z-20">
-							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'dateAdded' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('dateAdded')}>Date added</button>
-							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'duration' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('duration')}>Duration</button>
-							<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy === 'alphabetical' ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setSort('alphabetical')}>Alphabetical</button>
+						<div
+							class="absolute top-full left-0 mt-1 w-40 bg-black border border-neutral-600 shadow-xl z-20"
+						>
+							<button
+								class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy ===
+								'dateAdded'
+									? 'text-white bg-neutral-900'
+									: 'text-neutral-300'}"
+								onclick={() => setSort('dateAdded')}>Date added</button
+							>
+							<button
+								class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy ===
+								'duration'
+									? 'text-white bg-neutral-900'
+									: 'text-neutral-300'}"
+								onclick={() => setSort('duration')}>Duration</button
+							>
+							<button
+								class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {sortBy ===
+								'alphabetical'
+									? 'text-white bg-neutral-900'
+									: 'text-neutral-300'}"
+								onclick={() => setSort('alphabetical')}>Alphabetical</button
+							>
 						</div>
 					{/if}
 				</div>
@@ -635,25 +719,35 @@
 				<div class="hidden sm:block relative" bind:this={columnDropdownEl}>
 					<button
 						class="flex items-center gap-2 h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 hover:border-neutral-400 transition-colors text-white bg-neutral-900"
-						onclick={() => showColumnDropdown = !showColumnDropdown}
+						onclick={() => (showColumnDropdown = !showColumnDropdown)}
 						aria-label="Column count options"
 					>
 						<span>Columns: {columnCount}</span>
 						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M7 10l5 5 5-5z"/>
+							<path d="M7 10l5 5 5-5z" />
 						</svg>
 					</button>
 					{#if showColumnDropdown}
-						<div class="absolute top-full left-0 mt-1 w-32 bg-black border border-neutral-600 shadow-xl z-20">
+						<div
+							class="absolute top-full left-0 mt-1 w-32 bg-black border border-neutral-600 shadow-xl z-20"
+						>
 							{#each [2, 3, 4] as count}
-								<button class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {columnCount === count ? 'text-white bg-neutral-900' : 'text-neutral-300'}" onclick={() => setColumnCount(count)}>{count} columns</button>
+								<button
+									class="w-full px-3 py-2 text-sm text-left hover:bg-neutral-900 transition-colors {columnCount ===
+									count
+										? 'text-white bg-neutral-900'
+										: 'text-neutral-300'}"
+									onclick={() => setColumnCount(count)}>{count} columns</button
+								>
 							{/each}
 						</div>
 					{/if}
 				</div>
 
 				<button
-					class="flex-1 sm:flex-none h-9 px-3 text-xs uppercase tracking-wider border transition-colors {selectionMode ? 'border-white bg-white text-black' : 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}"
+					class="flex-1 sm:flex-none h-9 px-3 text-xs uppercase tracking-wider border transition-colors {selectionMode
+						? 'border-white bg-white text-black'
+						: 'border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400'}"
 					onclick={toggleSelectionMode}
 					aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
 				>
@@ -679,13 +773,22 @@
 
 				<div class="flex flex-wrap items-center gap-2">
 					{#if selectedCount > 0}
-						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors" onclick={() => showPlaylistPanel = true}>
+						<button
+							class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors"
+							onclick={() => (showPlaylistPanel = true)}
+						>
 							Add to Playlist
 						</button>
-						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors" onclick={() => showMetadataPanel = true}>
+						<button
+							class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors"
+							onclick={() => (showMetadataPanel = true)}
+						>
 							Edit selection
 						</button>
-						<button class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 text-white hover:border-neutral-400 hover:bg-neutral-800 transition-colors" onclick={clearSelection}>
+						<button
+							class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 text-white hover:border-neutral-400 hover:bg-neutral-800 transition-colors"
+							onclick={clearSelection}
+						>
 							Clear
 						</button>
 					{/if}
@@ -701,26 +804,43 @@
 		</div>
 	{:else if error && videos.length === 0}
 		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-			<p class="text-neutral-500 uppercase tracking-widest text-sm border border-neutral-800 p-8">Error: {error}</p>
+			<p class="text-neutral-500 uppercase tracking-widest text-sm border border-neutral-800 p-8">
+				Error: {error}
+			</p>
 		</div>
 	{:else if videos.length === 0}
 		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
 			<div class="border border-neutral-800 p-12 flex flex-col items-center text-center max-w-md">
 				<p class="text-neutral-400 uppercase tracking-widest mb-4">No Videos Found</p>
-				<p class="text-sm text-neutral-600 mb-6">Your library is currently empty or scanning is still in progress.</p>
-				<a href="/settings" class="btn btn-outline btn-sm text-white rounded-none uppercase tracking-widest text-xs">Go to Settings</a>
+				<p class="text-sm text-neutral-600 mb-6">
+					Your library is currently empty or scanning is still in progress.
+				</p>
+				<a
+					href="/settings"
+					class="btn btn-outline btn-sm text-white rounded-none uppercase tracking-widest text-xs"
+					>Go to Settings</a
+				>
 			</div>
 		</div>
 	{:else if filteredVideos.length === 0}
 		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-			<div class="border border-neutral-800 bg-black p-12 flex flex-col items-center text-center max-w-md">
+			<div
+				class="border border-neutral-800 bg-black p-12 flex flex-col items-center text-center max-w-md"
+			>
 				<p class="text-neutral-400 uppercase tracking-widest mb-4">No Matching Videos</p>
 				<p class="text-sm text-neutral-600">Try a different title or date-added search.</p>
 			</div>
 		</div>
 	{:else}
-		<div class="text-xs text-neutral-500 uppercase tracking-wider mb-4 flex flex-wrap items-center gap-2">
-			<span>Showing {(currentPage - 1) * itemsPerPage + 1} - {Math.min(currentPage * itemsPerPage, filteredVideos.length)} of {filteredVideos.length} videos</span>
+		<div
+			class="text-xs text-neutral-500 uppercase tracking-wider mb-4 flex flex-wrap items-center gap-2"
+		>
+			<span
+				>Showing {(currentPage - 1) * itemsPerPage + 1} - {Math.min(
+					currentPage * itemsPerPage,
+					filteredVideos.length
+				)} of {filteredVideos.length} videos</span
+			>
 		</div>
 
 		<div class="grid {getColumnClass(columnCount)} gap-6">
@@ -736,15 +856,29 @@
 
 		{#if totalPages > 1}
 			<div class="flex justify-center items-center gap-2 mt-8">
-				<button class="flex h-12 w-12 items-center justify-center border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" onclick={() => goToPage(currentPage - 1)} disabled={currentPage === 1} aria-label="Previous page">
-					<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/></svg>
+				<button
+					class="flex h-12 w-12 items-center justify-center border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+					onclick={() => goToPage(currentPage - 1)}
+					disabled={currentPage === 1}
+					aria-label="Previous page"
+				>
+					<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"
+						><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" /></svg
+					>
 				</button>
 
 				{#each Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
 					let start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
 					return start + i;
 				}) as pageNum}
-					<button class="flex h-12 w-12 items-center justify-center border text-xs font-mono transition-colors {currentPage === pageNum ? 'bg-neutral-700 text-white border-neutral-600' : 'text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white'}" onclick={() => goToPage(pageNum)} aria-label="Page {pageNum}">{pageNum}</button>
+					<button
+						class="flex h-12 w-12 items-center justify-center border text-xs font-mono transition-colors {currentPage ===
+						pageNum
+							? 'bg-neutral-700 text-white border-neutral-600'
+							: 'text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white'}"
+						onclick={() => goToPage(pageNum)}
+						aria-label="Page {pageNum}">{pageNum}</button
+					>
 				{/each}
 
 				{#if totalPages > 5 && currentPage < totalPages - 2}
@@ -752,11 +886,22 @@
 				{/if}
 
 				{#if totalPages > 5 && currentPage < totalPages - 2}
-					<button class="flex h-12 min-w-12 items-center justify-center border border-neutral-700 px-3 text-xs font-mono text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white" onclick={() => goToPage(totalPages)} aria-label="Last page">{totalPages}</button>
+					<button
+						class="flex h-12 min-w-12 items-center justify-center border border-neutral-700 px-3 text-xs font-mono text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white"
+						onclick={() => goToPage(totalPages)}
+						aria-label="Last page">{totalPages}</button
+					>
 				{/if}
 
-				<button class="flex h-12 w-12 items-center justify-center border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed" onclick={() => goToPage(currentPage + 1)} disabled={currentPage === totalPages} aria-label="Next page">
-					<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z"/></svg>
+				<button
+					class="flex h-12 w-12 items-center justify-center border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+					onclick={() => goToPage(currentPage + 1)}
+					disabled={currentPage === totalPages}
+					aria-label="Next page"
+				>
+					<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"
+						><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" /></svg
+					>
 				</button>
 			</div>
 		{/if}
@@ -781,7 +926,9 @@
 			}
 		}}
 	>
-		<div class="w-full max-w-2xl max-h-[90vh] overflow-hidden border border-neutral-800 bg-black shadow-2xl">
+		<div
+			class="w-full max-w-2xl max-h-[90vh] overflow-hidden border border-neutral-800 bg-black shadow-2xl"
+		>
 			<div class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5">
 				<div>
 					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Metadata Editor</p>
@@ -793,8 +940,16 @@
 						{/if}
 					</h2>
 				</div>
-				<button class="mt-0.5 text-neutral-400 hover:text-white transition-colors" aria-label="Close metadata editor" onclick={() => showMetadataPanel = false}>
-					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+				<button
+					class="mt-0.5 text-neutral-400 hover:text-white transition-colors"
+					aria-label="Close metadata editor"
+					onclick={() => (showMetadataPanel = false)}
+				>
+					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"
+						><path
+							d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+						/></svg
+					>
 				</button>
 			</div>
 
@@ -804,7 +959,10 @@
 						<div class="grid gap-4 border border-neutral-800 bg-neutral-950/60 p-4 text-sm">
 							<div>
 								<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Selection</p>
-								<p class="mt-2 text-white">Exact metadata editing for this video group. Changes apply to every quality variant with the same title.</p>
+								<p class="mt-2 text-white">
+									Exact metadata editing for this video group. Changes apply to every quality
+									variant with the same title.
+								</p>
 							</div>
 						</div>
 
@@ -832,7 +990,10 @@
 					<div class="space-y-6">
 						<div class="border border-neutral-800 bg-neutral-950/60 p-4">
 							<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Bulk editing</p>
-							<p class="mt-2 text-white">Bulk updates are non-destructive: add tags and actors to every selected group, or remove specific ones across the whole selection.</p>
+							<p class="mt-2 text-white">
+								Bulk updates are non-destructive: add tags and actors to every selected group, or
+								remove specific ones across the whole selection.
+							</p>
 						</div>
 
 						<div class="grid gap-6 lg:grid-cols-2">
@@ -899,7 +1060,10 @@
 							Apply Bulk Update
 						{/if}
 					</button>
-					<button class="border border-neutral-700 px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white" onclick={() => showMetadataPanel = false}>
+					<button
+						class="border border-neutral-700 px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
+						onclick={() => (showMetadataPanel = false)}
+					>
 						Cancel
 					</button>
 				</div>
@@ -929,32 +1093,55 @@
 			}
 		}}
 	>
-		<div class="w-full max-w-lg overflow-hidden border border-neutral-800 bg-black shadow-2xl flex flex-col max-h-[90vh]">
-			<div class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5 shrink-0">
+		<div
+			class="w-full max-w-lg overflow-hidden border border-neutral-800 bg-black shadow-2xl flex flex-col max-h-[90vh]"
+		>
+			<div
+				class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5 shrink-0"
+			>
 				<div>
 					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Playlists</p>
 					<h2 class="mt-2 text-lg font-semibold text-white">
-						Add {selectedCount} {selectedCount === 1 ? 'video' : 'videos'} to playlist
+						Add {selectedCount}
+						{selectedCount === 1 ? 'video' : 'videos'} to playlist
 					</h2>
 				</div>
-				<button class="mt-0.5 text-neutral-400 hover:text-white transition-colors" aria-label="Close playlist panel" onclick={() => showPlaylistPanel = false}>
-					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>
+				<button
+					class="mt-0.5 text-neutral-400 hover:text-white transition-colors"
+					aria-label="Close playlist panel"
+					onclick={() => (showPlaylistPanel = false)}
+				>
+					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"
+						><path
+							d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"
+						/></svg
+					>
 				</button>
 			</div>
 
 			<div class="px-6 py-5 space-y-6 overflow-y-auto min-h-0 flex-1">
 				<div>
-					<h3 class="text-sm uppercase tracking-widest text-neutral-400 mb-3 border-b border-neutral-800 pb-2">Create New</h3>
-					<form class="flex gap-2" onsubmit={(e) => { e.preventDefault(); createPlaylist(); }}>
-						<input 
-							type="text" 
-							bind:value={newPlaylistName} 
-							placeholder="Playlist name" 
+					<h3
+						class="text-sm uppercase tracking-widest text-neutral-400 mb-3 border-b border-neutral-800 pb-2"
+					>
+						Create New
+					</h3>
+					<form
+						class="flex gap-2"
+						onsubmit={(e) => {
+							e.preventDefault();
+							createPlaylist();
+						}}
+					>
+						<input
+							type="text"
+							bind:value={newPlaylistName}
+							placeholder="Playlist name"
 							class="h-10 flex-1 bg-neutral-900 border border-neutral-700 px-3 text-white outline-none focus:border-neutral-500 text-sm"
 							disabled={savingPlaylist}
 						/>
-						<button 
-							type="submit" 
+						<button
+							type="submit"
 							class="h-10 px-4 text-xs font-bold uppercase tracking-widest bg-white text-black hover:bg-white/80 transition-colors disabled:opacity-50"
 							disabled={savingPlaylist || !newPlaylistName.trim()}
 						>
@@ -965,10 +1152,14 @@
 
 				{#if playlists.length > 0}
 					<div>
-						<h3 class="text-sm uppercase tracking-widest text-neutral-400 mb-3 border-b border-neutral-800 pb-2">Add to Existing</h3>
+						<h3
+							class="text-sm uppercase tracking-widest text-neutral-400 mb-3 border-b border-neutral-800 pb-2"
+						>
+							Add to Existing
+						</h3>
 						<div class="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2">
 							{#each playlists as playlist (playlist.id)}
-								<button 
+								<button
 									class="flex items-center justify-between p-3 border border-neutral-800 hover:border-neutral-500 bg-neutral-950/60 hover:bg-neutral-900 transition-colors text-left"
 									onclick={() => addToPlaylist(playlist.id)}
 									disabled={savingPlaylist}
@@ -982,12 +1173,17 @@
 				{/if}
 
 				{#if playlistMessage}
-					<p class="text-sm text-neutral-400 p-3 bg-neutral-900 border border-neutral-800">{playlistMessage}</p>
+					<p class="text-sm text-neutral-400 p-3 bg-neutral-900 border border-neutral-800">
+						{playlistMessage}
+					</p>
 				{/if}
 			</div>
 
 			<div class="border-t border-neutral-800 px-6 py-5 shrink-0">
-				<button class="w-full h-10 border border-neutral-700 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white" onclick={() => showPlaylistPanel = false}>
+				<button
+					class="w-full h-10 border border-neutral-700 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
+					onclick={() => (showPlaylistPanel = false)}
+				>
 					Close
 				</button>
 			</div>

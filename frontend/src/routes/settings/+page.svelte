@@ -55,7 +55,8 @@
 	onMount(async () => {
 		try {
 			const mediaPathRes = await authFetch('/api/settings/media-path');
-			if (!mediaPathRes.ok) throw new Error(await readError(mediaPathRes, 'Failed to load media path'));
+			if (!mediaPathRes.ok)
+				throw new Error(await readError(mediaPathRes, 'Failed to load media path'));
 			const mediaPathData = await mediaPathRes.json();
 			mediaPath = mediaPathData?.path || '';
 			newMediaPath = mediaPathData?.path || '';
@@ -65,7 +66,8 @@
 
 		try {
 			const generationRes = await authFetch('/api/settings/generation');
-			if (!generationRes.ok) throw new Error(await readError(generationRes, 'Failed to load generation settings'));
+			if (!generationRes.ok)
+				throw new Error(await readError(generationRes, 'Failed to load generation settings'));
 			const generationData = await generationRes.json();
 			selectedThumbnails = Boolean(generationData?.generate_thumbnails);
 			selectedScrubberSprites = Boolean(generationData?.generate_scrubber_sprites);
@@ -77,7 +79,8 @@
 
 		try {
 			const previewStatusRes = await authFetch('/api/previews/status');
-			if (!previewStatusRes.ok) throw new Error(await readError(previewStatusRes, 'Failed to load preview status'));
+			if (!previewStatusRes.ok)
+				throw new Error(await readError(previewStatusRes, 'Failed to load preview status'));
 			applyPreviewProgress(await previewStatusRes.json());
 		} catch (err) {
 			previewGenMessage = `Error: ${err.message}`;
@@ -85,7 +88,8 @@
 
 		try {
 			const metadataRes = await authFetch('/api/settings/metadata');
-			if (!metadataRes.ok) throw new Error(await readError(metadataRes, 'Failed to load metadata settings'));
+			if (!metadataRes.ok)
+				throw new Error(await readError(metadataRes, 'Failed to load metadata settings'));
 			metadataOptions = await metadataRes.json();
 		} catch (err) {
 			metadataSettingsMessage = `Error: ${err.message}`;
@@ -117,7 +121,7 @@
 
 		return () => clearInterval(interval);
 	});
-	
+
 	async function scanLibrary() {
 		if (scanning) return;
 		scanning = true;
@@ -131,7 +135,7 @@
 		} finally {
 			setTimeout(() => {
 				scanning = false;
-				setTimeout(() => message = '', 5000);
+				setTimeout(() => (message = ''), 5000);
 			}, 1000);
 		}
 	}
@@ -264,7 +268,8 @@
 
 		try {
 			const res = await authFetch('/api/previews/status');
-			if (!res.ok) throw new Error(await readError(res, 'Failed to load preview generation status'));
+			if (!res.ok)
+				throw new Error(await readError(res, 'Failed to load preview generation status'));
 			applyPreviewProgress(await res.json());
 		} catch (err) {
 			if (generatingPreviews) {
@@ -296,7 +301,11 @@
 
 	async function clearDatabase() {
 		if (clearingDatabase) return;
-		if (!confirm('Are you sure you want to clear the library database? This will remove all video metadata but will not delete any files.')) {
+		if (
+			!confirm(
+				'Are you sure you want to clear the library database? This will remove all video metadata but will not delete any files.'
+			)
+		) {
 			return;
 		}
 		clearingDatabase = true;
@@ -425,7 +434,9 @@
 </svelte:head>
 
 <div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
-	<h1 class="text-2xl font-bold uppercase tracking-widest mb-8 border-b border-neutral-800 pb-4">Settings</h1>
+	<h1 class="text-2xl font-bold uppercase tracking-widest mb-8 border-b border-neutral-800 pb-4">
+		Settings
+	</h1>
 
 	<div class="mb-2 flex items-center justify-between gap-3 sm:hidden">
 		<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Swipe Tabs</p>
@@ -433,52 +444,83 @@
 	</div>
 
 	<div class="relative -mx-4 mb-8 border-b border-neutral-800 px-4 sm:mx-0 sm:px-0">
-		<div class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-black to-transparent sm:hidden"></div>
+		<div
+			class="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-black to-transparent sm:hidden"
+		></div>
 		<div
 			class="overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
 			role="tablist"
 			aria-label="Settings sections"
 		>
-		<div class="flex min-w-max gap-1 sm:min-w-0 sm:flex-wrap">
-		{#each tabs as tab}
-			<button
-				onclick={() => activeTab = tab.id}
-				id="settings-tab-{tab.id}"
-				role="tab"
-				aria-selected={activeTab === tab.id}
-				aria-controls="settings-panel-{tab.id}"
-				tabindex={activeTab === tab.id ? 0 : -1}
-				class="shrink-0 whitespace-nowrap px-6 py-3 text-xs uppercase tracking-widest font-semibold transition-colors {activeTab === tab.id ? 'bg-white text-black' : 'text-neutral-400 hover:text-white hover:bg-neutral-900'}"
-			>
-				{tab.label}
-			</button>
-		{/each}
-		</div>
+			<div class="flex min-w-max gap-1 sm:min-w-0 sm:flex-wrap">
+				{#each tabs as tab}
+					<button
+						onclick={() => (activeTab = tab.id)}
+						id="settings-tab-{tab.id}"
+						role="tab"
+						aria-selected={activeTab === tab.id}
+						aria-controls="settings-panel-{tab.id}"
+						tabindex={activeTab === tab.id ? 0 : -1}
+						class="shrink-0 whitespace-nowrap px-6 py-3 text-xs uppercase tracking-widest font-semibold transition-colors {activeTab ===
+						tab.id
+							? 'bg-white text-black'
+							: 'text-neutral-400 hover:text-white hover:bg-neutral-900'}"
+					>
+						{tab.label}
+					</button>
+				{/each}
+			</div>
 		</div>
 	</div>
 
 	{#if activeTab === 'account'}
-		<div class="space-y-8" id="settings-panel-account" role="tabpanel" aria-labelledby="settings-tab-account">
+		<div
+			class="space-y-8"
+			id="settings-panel-account"
+			role="tabpanel"
+			aria-labelledby="settings-tab-account"
+		>
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Password</h2>
-					<p class="text-xs text-neutral-500">Signed in as {$auth.username}. Update your account password below.</p>
+					<p class="text-xs text-neutral-500">
+						Signed in as {$auth.username}. Update your account password below.
+					</p>
 				</div>
 
 				<div class="w-full grid gap-4">
 					<label class="grid gap-2">
-						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Current Password</span>
-						<input type="password" bind:value={currentPassword} class="w-full border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500" autocomplete="current-password" />
+						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400"
+							>Current Password</span
+						>
+						<input
+							type="password"
+							bind:value={currentPassword}
+							class="w-full border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500"
+							autocomplete="current-password"
+						/>
 					</label>
 
 					<label class="grid gap-2">
 						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">New Password</span>
-						<input type="password" bind:value={newPassword} class="w-full border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500" autocomplete="new-password" />
+						<input
+							type="password"
+							bind:value={newPassword}
+							class="w-full border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500"
+							autocomplete="new-password"
+						/>
 					</label>
 
 					<label class="grid gap-2">
-						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Confirm New Password</span>
-						<input type="password" bind:value={confirmPassword} class="w-full border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500" autocomplete="new-password" />
+						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400"
+							>Confirm New Password</span
+						>
+						<input
+							type="password"
+							bind:value={confirmPassword}
+							class="w-full border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500"
+							autocomplete="new-password"
+						/>
 					</label>
 				</div>
 
@@ -496,7 +538,11 @@
 				</button>
 
 				{#if passwordMessage}
-					<p class="text-xs tracking-wide {passwordMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
+					<p
+						class="text-xs tracking-wide {passwordMessage.startsWith('Error')
+							? 'text-red-500'
+							: 'text-neutral-400'} mt-2"
+					>
 						{passwordMessage}
 					</p>
 				{/if}
@@ -505,14 +551,23 @@
 	{/if}
 
 	{#if activeTab === 'library'}
-		<div class="space-y-8" id="settings-panel-library" role="tabpanel" aria-labelledby="settings-tab-library">
+		<div
+			class="space-y-8"
+			id="settings-panel-library"
+			role="tabpanel"
+			aria-labelledby="settings-tab-library"
+		>
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
-					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Library Management</h2>
-					<p class="text-xs text-neutral-500">Trigger a manual rescan of your media directory to discover new files.</p>
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">
+						Library Management
+					</h2>
+					<p class="text-xs text-neutral-500">
+						Trigger a manual rescan of your media directory to discover new files.
+					</p>
 				</div>
-				
-				<button 
+
+				<button
 					onclick={scanLibrary}
 					disabled={scanning}
 					class="mt-2 bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
@@ -524,9 +579,13 @@
 						Rescan Library
 					{/if}
 				</button>
-				
+
 				{#if message}
-					<p class="text-xs tracking-wide {message.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
+					<p
+						class="text-xs tracking-wide {message.startsWith('Error')
+							? 'text-red-500'
+							: 'text-neutral-400'} mt-2"
+					>
 						{message}
 					</p>
 				{/if}
@@ -534,7 +593,9 @@
 
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
-					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Media Path</h2>
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">
+						Media Path
+					</h2>
 					<p class="text-xs text-neutral-500">Configure the path to scan for media files.</p>
 				</div>
 
@@ -557,7 +618,7 @@
 								class="flex-1 border border-neutral-800 bg-black px-4 py-3 outline-none focus:border-neutral-500 text-sm"
 							/>
 							<button
-								onclick={() => showMediaBrowser = true}
+								onclick={() => (showMediaBrowser = true)}
 								class="bg-neutral-800 text-white hover:bg-neutral-700 font-bold uppercase tracking-widest text-xs px-4 py-3 transition-colors"
 							>
 								Browse
@@ -580,7 +641,11 @@
 				</button>
 
 				{#if mediaPathMessage}
-					<p class="text-xs tracking-wide {mediaPathMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
+					<p
+						class="text-xs tracking-wide {mediaPathMessage.startsWith('Error')
+							? 'text-red-500'
+							: 'text-neutral-400'} mt-2"
+					>
 						{mediaPathMessage}
 					</p>
 				{/if}
@@ -588,111 +653,193 @@
 
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
-					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Preview Generation</h2>
-					<p class="text-xs text-neutral-500">Configure and generate preview assets for your library.</p>
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">
+						Preview Generation
+					</h2>
+					<p class="text-xs text-neutral-500">
+						Configure and generate preview assets for your library.
+					</p>
 				</div>
 
 				<div class="w-full border border-neutral-800 bg-neutral-900/30 p-4 rounded">
 					<label class="flex items-center justify-between gap-4">
 						<div>
 							<p class="text-sm text-white uppercase tracking-widest">Auto-generate during scans</p>
-							<p class="text-xs text-neutral-500 mt-1">Automatically generate preview assets when scanning the library.</p>
+							<p class="text-xs text-neutral-500 mt-1">
+								Automatically generate preview assets when scanning the library.
+							</p>
 						</div>
-						<input type="checkbox" bind:checked={selectedAutoGenerate} onchange={saveGenerationSettings} class="toggle toggle-sm rounded-none" />
+						<input
+							type="checkbox"
+							bind:checked={selectedAutoGenerate}
+							onchange={saveGenerationSettings}
+							class="toggle toggle-sm rounded-none"
+						/>
 					</label>
 				</div>
 
 				<div class="w-full grid gap-4 border-t border-neutral-800 pt-4">
-					<p class="text-xs text-neutral-400 uppercase tracking-widest mb-2">Manual Generation Options</p>
-					
-					<label class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3">
+					<p class="text-xs text-neutral-400 uppercase tracking-widest mb-2">
+						Manual Generation Options
+					</p>
+
+					<label
+						class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3"
+					>
 						<div>
 							<p class="text-sm text-white uppercase tracking-widest">Generate thumbnails</p>
-							<p class="text-xs text-neutral-500 mt-1">Include thumbnails when generating previews.</p>
+							<p class="text-xs text-neutral-500 mt-1">
+								Include thumbnails when generating previews.
+							</p>
 						</div>
-						<input type="checkbox" bind:checked={selectedThumbnails} onchange={saveGenerationSettings} class="toggle toggle-sm rounded-none" />
+						<input
+							type="checkbox"
+							bind:checked={selectedThumbnails}
+							onchange={saveGenerationSettings}
+							class="toggle toggle-sm rounded-none"
+						/>
 					</label>
 
-					<label class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3">
+					<label
+						class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3"
+					>
 						<div>
 							<p class="text-sm text-white uppercase tracking-widest">Generate scrubber sprites</p>
-							<p class="text-xs text-neutral-500 mt-1">Include scrubber sprite sheets when generating previews.</p>
+							<p class="text-xs text-neutral-500 mt-1">
+								Include scrubber sprite sheets when generating previews.
+							</p>
 						</div>
-						<input type="checkbox" bind:checked={selectedScrubberSprites} onchange={saveGenerationSettings} class="toggle toggle-sm rounded-none" />
+						<input
+							type="checkbox"
+							bind:checked={selectedScrubberSprites}
+							onchange={saveGenerationSettings}
+							class="toggle toggle-sm rounded-none"
+						/>
 					</label>
 
-					<label class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3">
+					<label
+						class="flex items-center justify-between gap-4 border border-neutral-800 bg-black px-4 py-3"
+					>
 						<div>
 							<p class="text-sm text-white uppercase tracking-widest">Generate hover previews</p>
-							<p class="text-xs text-neutral-500 mt-1">Include hover previews when generating previews.</p>
+							<p class="text-xs text-neutral-500 mt-1">
+								Include hover previews when generating previews.
+							</p>
 						</div>
-						<input type="checkbox" bind:checked={selectedHoverPreviews} onchange={saveGenerationSettings} class="toggle toggle-sm rounded-none" />
+						<input
+							type="checkbox"
+							bind:checked={selectedHoverPreviews}
+							onchange={saveGenerationSettings}
+							class="toggle toggle-sm rounded-none"
+						/>
 					</label>
 				</div>
 
 				{#if generationSettingsMessage}
-					<p class="text-xs tracking-wide {generationSettingsMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'}">
+					<p
+						class="text-xs tracking-wide {generationSettingsMessage.startsWith('Error')
+							? 'text-red-500'
+							: 'text-neutral-400'}"
+					>
 						{generationSettingsMessage}
 					</p>
 				{/if}
 
 				<div class="w-full border-t border-neutral-800 pt-4 mt-2">
-					<p class="text-xs text-neutral-500 mb-4">Generate preview assets manually for all videos in your library.</p>
-					
+					<p class="text-xs text-neutral-500 mb-4">
+						Generate preview assets manually for all videos in your library.
+					</p>
+
 					<button
 						onclick={generatePreviews}
 						disabled={generatingPreviews}
 						class="bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
 					>
-					{#if generatingPreviews}
-						<span class="loading loading-spinner loading-xs"></span>
-						{previewProgress?.processed_videos || 0}/{previewProgress?.total_videos || 0}
-					{:else}
-						Generate Previews
-					{/if}
-				</button>
-
-				{#if previewProgress && previewProgress.status !== 'idle'}
-					<div class="mt-4 w-full border border-neutral-800 bg-black p-4 space-y-3">
-						<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-							<div>
-								<p class="text-xs uppercase tracking-widest text-neutral-400">Preview Job Status</p>
-								<p class="text-sm text-white mt-1">{getPreviewStatusLabel(previewProgress)} · {previewProgress.processed_videos}/{previewProgress.total_videos} videos</p>
-							</div>
-							<div class="text-xs uppercase tracking-widest text-neutral-500">
-								{getPreviewProgressPercent(previewProgress)}%
-							</div>
-						</div>
-
-						<div class="h-2 w-full border border-neutral-800 bg-neutral-950">
-							<div class="h-full bg-white transition-all duration-300" style={`width: ${getPreviewProgressPercent(previewProgress)}%`}></div>
-						</div>
-
-						<div class="grid gap-2 text-xs text-neutral-400 sm:grid-cols-2">
-							<p>Source: <span class="text-white uppercase">{previewProgress.source || 'manual'}</span></p>
-							<p>Errors: <span class="text-white">{previewProgress.errors}</span></p>
-							{#if previewProgress.current_step}
-								<p>Current step: <span class="text-white">{previewProgress.current_step}</span></p>
-							{/if}
-							{#if previewProgress.current_video_title}
-								<p>Current video: <span class="text-white">{previewProgress.current_video_title}</span></p>
-							{/if}
-							{#if previewProgress.started_at}
-								<p>Started: <span class="text-white">{formatLogTimestamp(previewProgress.started_at)}</span></p>
-							{/if}
-							{#if previewProgress.completed_at}
-								<p>Completed: <span class="text-white">{formatLogTimestamp(previewProgress.completed_at)}</span></p>
-							{/if}
-						</div>
-
-						{#if previewProgress.message}
-							<p class="text-xs tracking-wide {previewProgress.status === 'failed' ? 'text-red-500' : 'text-neutral-400'}">{previewProgress.message}</p>
+						{#if generatingPreviews}
+							<span class="loading loading-spinner loading-xs"></span>
+							{previewProgress?.processed_videos || 0}/{previewProgress?.total_videos || 0}
+						{:else}
+							Generate Previews
 						{/if}
-					</div>
-				{/if}
+					</button>
 
-				{#if previewGenMessage}
-					<p class="text-xs tracking-wide {previewGenMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-3">
+					{#if previewProgress && previewProgress.status !== 'idle'}
+						<div class="mt-4 w-full border border-neutral-800 bg-black p-4 space-y-3">
+							<div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+								<div>
+									<p class="text-xs uppercase tracking-widest text-neutral-400">
+										Preview Job Status
+									</p>
+									<p class="text-sm text-white mt-1">
+										{getPreviewStatusLabel(previewProgress)} · {previewProgress.processed_videos}/{previewProgress.total_videos}
+										videos
+									</p>
+								</div>
+								<div class="text-xs uppercase tracking-widest text-neutral-500">
+									{getPreviewProgressPercent(previewProgress)}%
+								</div>
+							</div>
+
+							<div class="h-2 w-full border border-neutral-800 bg-neutral-950">
+								<div
+									class="h-full bg-white transition-all duration-300"
+									style={`width: ${getPreviewProgressPercent(previewProgress)}%`}
+								></div>
+							</div>
+
+							<div class="grid gap-2 text-xs text-neutral-400 sm:grid-cols-2">
+								<p>
+									Source: <span class="text-white uppercase"
+										>{previewProgress.source || 'manual'}</span
+									>
+								</p>
+								<p>Errors: <span class="text-white">{previewProgress.errors}</span></p>
+								{#if previewProgress.current_step}
+									<p>
+										Current step: <span class="text-white">{previewProgress.current_step}</span>
+									</p>
+								{/if}
+								{#if previewProgress.current_video_title}
+									<p>
+										Current video: <span class="text-white"
+											>{previewProgress.current_video_title}</span
+										>
+									</p>
+								{/if}
+								{#if previewProgress.started_at}
+									<p>
+										Started: <span class="text-white"
+											>{formatLogTimestamp(previewProgress.started_at)}</span
+										>
+									</p>
+								{/if}
+								{#if previewProgress.completed_at}
+									<p>
+										Completed: <span class="text-white"
+											>{formatLogTimestamp(previewProgress.completed_at)}</span
+										>
+									</p>
+								{/if}
+							</div>
+
+							{#if previewProgress.message}
+								<p
+									class="text-xs tracking-wide {previewProgress.status === 'failed'
+										? 'text-red-500'
+										: 'text-neutral-400'}"
+								>
+									{previewProgress.message}
+								</p>
+							{/if}
+						</div>
+					{/if}
+
+					{#if previewGenMessage}
+						<p
+							class="text-xs tracking-wide {previewGenMessage.startsWith('Error')
+								? 'text-red-500'
+								: 'text-neutral-400'} mt-3"
+						>
 							{previewGenMessage}
 						</p>
 					{/if}
@@ -701,8 +848,13 @@
 
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
-					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Metadata Library</h2>
-					<p class="text-xs text-neutral-500">Manage the persistent global tag and actor catalog. Removing an entry here also removes it from videos that currently use it.</p>
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">
+						Metadata Library
+					</h2>
+					<p class="text-xs text-neutral-500">
+						Manage the persistent global tag and actor catalog. Removing an entry here also removes
+						it from videos that currently use it.
+					</p>
 				</div>
 
 				<div class="w-full grid gap-6 lg:grid-cols-2">
@@ -720,7 +872,9 @@
 						<div class="space-y-3">
 							<p class="text-xs uppercase tracking-[0.25em] text-neutral-400">Saved Tags</p>
 							{#if metadataOptions.tags.length === 0}
-								<p class="border border-neutral-800 bg-black px-4 py-3 text-sm text-neutral-500">No tags yet.</p>
+								<p class="border border-neutral-800 bg-black px-4 py-3 text-sm text-neutral-500">
+									No tags yet.
+								</p>
 							{:else}
 								<div class="flex flex-wrap gap-2">
 									{#each metadataOptions.tags as tag (tag)}
@@ -751,9 +905,13 @@
 						/>
 
 						<div class="space-y-3">
-							<p class="text-xs uppercase tracking-[0.25em] text-neutral-400">Saved Actors / Actresses</p>
+							<p class="text-xs uppercase tracking-[0.25em] text-neutral-400">
+								Saved Actors / Actresses
+							</p>
 							{#if metadataOptions.actors.length === 0}
-								<p class="border border-neutral-800 bg-black px-4 py-3 text-sm text-neutral-500">No actors yet.</p>
+								<p class="border border-neutral-800 bg-black px-4 py-3 text-sm text-neutral-500">
+									No actors yet.
+								</p>
 							{:else}
 								<div class="flex flex-wrap gap-2">
 									{#each metadataOptions.actors as actor (actor)}
@@ -787,7 +945,11 @@
 				</button>
 
 				{#if metadataSettingsMessage}
-					<p class="text-xs tracking-wide {metadataSettingsMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
+					<p
+						class="text-xs tracking-wide {metadataSettingsMessage.startsWith('Error')
+							? 'text-red-500'
+							: 'text-neutral-400'} mt-2"
+					>
 						{metadataSettingsMessage}
 					</p>
 				{/if}
@@ -796,7 +958,9 @@
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
 					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Database</h2>
-					<p class="text-xs text-neutral-500">Clear the library database. This removes all video metadata but keeps your files.</p>
+					<p class="text-xs text-neutral-500">
+						Clear the library database. This removes all video metadata but keeps your files.
+					</p>
 				</div>
 
 				<button
@@ -813,7 +977,11 @@
 				</button>
 
 				{#if clearDatabaseMessage}
-					<p class="text-xs tracking-wide {clearDatabaseMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'} mt-2">
+					<p
+						class="text-xs tracking-wide {clearDatabaseMessage.startsWith('Error')
+							? 'text-red-500'
+							: 'text-neutral-400'} mt-2"
+					>
 						{clearDatabaseMessage}
 					</p>
 				{/if}
@@ -822,10 +990,17 @@
 	{/if}
 
 	{#if activeTab === 'system'}
-		<div class="space-y-8" id="settings-panel-system" role="tabpanel" aria-labelledby="settings-tab-system">
+		<div
+			class="space-y-8"
+			id="settings-panel-system"
+			role="tabpanel"
+			aria-labelledby="settings-tab-system"
+		>
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
 				<div>
-					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">System Info</h2>
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">
+						System Info
+					</h2>
 					<p class="text-xs text-neutral-500">Collectarr Media Server v1.0.0</p>
 				</div>
 			</section>
@@ -833,12 +1008,21 @@
 	{/if}
 
 	{#if activeTab === 'logs'}
-		<div class="space-y-8" id="settings-panel-logs" role="tabpanel" aria-labelledby="settings-tab-logs">
+		<div
+			class="space-y-8"
+			id="settings-panel-logs"
+			role="tabpanel"
+			aria-labelledby="settings-tab-logs"
+		>
 			<section class="border border-neutral-800 p-6 flex flex-col gap-4">
 				<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
 					<div>
-						<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">Application Logs</h2>
-						<p class="text-xs text-neutral-500">Live backend activity, API requests, scans, database changes, and preview jobs.</p>
+						<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">
+							Application Logs
+						</h2>
+						<p class="text-xs text-neutral-500">
+							Live backend activity, API requests, scans, database changes, and preview jobs.
+						</p>
 					</div>
 
 					<button
@@ -865,7 +1049,9 @@
 							<span class="loading loading-spinner loading-lg text-white"></span>
 						</div>
 					{:else if logs.length === 0}
-						<div class="flex min-h-[28rem] items-center justify-center px-6 text-center text-xs uppercase tracking-widest text-neutral-500">
+						<div
+							class="flex min-h-[28rem] items-center justify-center px-6 text-center text-xs uppercase tracking-widest text-neutral-500"
+						>
 							No logs captured yet.
 						</div>
 					{:else}
@@ -875,7 +1061,13 @@
 									<div class="flex flex-col gap-2 lg:flex-row lg:items-center lg:justify-between">
 										<div class="flex flex-wrap items-center gap-2">
 											<span class="text-neutral-500">{formatLogTimestamp(entry.timestamp)}</span>
-											<span class="border px-2 py-0.5 uppercase tracking-widest {entry.level === 'ERROR' ? 'border-red-800 text-red-400' : entry.level === 'WARN' ? 'border-amber-800 text-amber-400' : 'border-neutral-700 text-neutral-300'}">{entry.level}</span>
+											<span
+												class="border px-2 py-0.5 uppercase tracking-widest {entry.level === 'ERROR'
+													? 'border-red-800 text-red-400'
+													: entry.level === 'WARN'
+														? 'border-amber-800 text-amber-400'
+														: 'border-neutral-700 text-neutral-300'}">{entry.level}</span
+											>
 										</div>
 										<p class="text-neutral-100 break-all">{entry.message}</p>
 									</div>
@@ -883,7 +1075,9 @@
 									{#if entry.fields?.length}
 										<div class="flex flex-wrap gap-2 text-[11px] text-neutral-400">
 											{#each entry.fields as field}
-												<span class="border border-neutral-800 bg-neutral-950 px-2 py-1 break-all">{field.key}={field.value}</span>
+												<span class="border border-neutral-800 bg-neutral-950 px-2 py-1 break-all"
+													>{field.key}={field.value}</span
+												>
 											{/each}
 										</div>
 									{/if}
@@ -900,5 +1094,7 @@
 <DirectoryBrowser
 	bind:isOpen={showMediaBrowser}
 	title="Select Media Path"
-	onSelect={(path) => { newMediaPath = path; }}
+	onSelect={(path) => {
+		newMediaPath = path;
+	}}
 />
