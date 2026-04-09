@@ -32,8 +32,6 @@
 	let searchedQuery = $state('');
 	let results = $state([]);
 	let warnings = $state([]);
-	let recentSearches = $state([]);
-	let showRecentSearches = $state(false);
 	let searchInputRef = $state(null);
 
 	// Pagination state
@@ -140,30 +138,8 @@
 		loadHistory();
 	});
 
-	// Auto-search debounce
-	let searchTimeout = null;
-	$effect(() => {
-		if (!query.trim() || searching) return;
-		if (searchTimeout) clearTimeout(searchTimeout);
-		searchTimeout = setTimeout(() => {
-			if (query.trim().length >= 3) {
-				searchTorrents();
-			}
-		}, 800);
-		return () => {
-			if (searchTimeout) clearTimeout(searchTimeout);
-		};
-	});
-
-	// Load recent searches from localStorage
 	onMount(async () => {
 		await loadIndexers();
-		const saved = localStorage.getItem('torrentRecentSearches');
-		if (saved) {
-			try {
-				recentSearches = JSON.parse(saved);
-			} catch {}
-		}
 		
 		// Keyboard shortcuts
 		document.addEventListener('keydown', handleKeydown);
@@ -189,23 +165,6 @@
 				goToPage(currentPage + 1);
 			}
 		}
-	}
-
-	function saveRecentSearch(searchQuery) {
-		if (!searchQuery.trim()) return;
-		recentSearches = [searchQuery, ...recentSearches.filter(s => s !== searchQuery)].slice(0, 10);
-		localStorage.setItem('torrentRecentSearches', JSON.stringify(recentSearches));
-	}
-
-	function selectRecentSearch(search) {
-		query = search;
-		showRecentSearches = false;
-		searchTorrents();
-	}
-
-	function clearRecentSearches() {
-		recentSearches = [];
-		localStorage.removeItem('torrentRecentSearches');
 	}
 
 	async function readJSONSafe(response) {
@@ -317,7 +276,6 @@
 
 		searching = true;
 		searchedQuery = trimmedQuery;
-		saveRecentSearch(trimmedQuery);
 		try {
 			const params = new URLSearchParams({ q: trimmedQuery });
 			if (minSeeders) params.set('min_seeders', minSeeders);
@@ -342,7 +300,6 @@
 
 	function handleSearchSubmit(event) {
 		event.preventDefault();
-		showRecentSearches = false;
 		searchTorrents();
 	}
 
@@ -599,30 +556,13 @@
 				</div>
 
 				<form class="mt-6 grid gap-4" onsubmit={handleSearchSubmit}>
-					<div class="relative">
-						<input 
-							bind:this={searchInputRef}
-							bind:value={query} 
-							onfocus={() => showRecentSearches = recentSearches.length > 0}
-							onblur={() => setTimeout(() => showRecentSearches = false, 200)}
-							type="search" 
-							placeholder="Search torrents... (press / to focus)" 
-							class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500" 
-						/>
-						{#if showRecentSearches}
-							<div class="absolute top-full left-0 right-0 z-20 mt-1 border border-neutral-700 bg-neutral-900 shadow-lg">
-								<div class="flex items-center justify-between border-b border-neutral-800 px-4 py-2">
-									<span class="text-xs uppercase tracking-[0.25em] text-neutral-500">Recent Searches</span>
-									<button type="button" onclick={clearRecentSearches} class="text-[10px] text-neutral-500 hover:text-white">Clear</button>
-								</div>
-								{#each recentSearches as search}
-									<button type="button" onclick={() => selectRecentSearch(search)} class="block w-full px-4 py-2 text-left text-sm text-neutral-300 hover:bg-neutral-800">
-										{search}
-									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
+					<input 
+						bind:this={searchInputRef}
+						bind:value={query} 
+						type="search" 
+						placeholder="Search torrents... (press / to focus)" 
+						class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500" 
+					/>
 					
 					<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
 						<label class="grid gap-1">
