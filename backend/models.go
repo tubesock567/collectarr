@@ -138,6 +138,42 @@ type SettingsMetadataUpdateRequest struct {
 	RemoveActors []string `json:"remove_actors"`
 }
 
+type TorrentIndexer struct {
+	ID         string `json:"id"`
+	TorznabURL string `json:"torznab_url"`
+	APIKey     string `json:"api_key"`
+	Tracker    string `json:"tracker"`
+}
+
+type TorrentIndexerCreateRequest struct {
+	TorznabURL string `json:"torznab_url"`
+	APIKey     string `json:"api_key"`
+}
+
+type TorrentIndexerResponse struct {
+	ID           string `json:"id"`
+	TorznabURL   string `json:"torznab_url"`
+	Tracker      string `json:"tracker"`
+	MaskedAPIKey string `json:"masked_api_key"`
+}
+
+type TorrentSearchResult struct {
+	Title       string `json:"title"`
+	URL         string `json:"url"`
+	DownloadURL string `json:"download_url"`
+	Tracker     string `json:"tracker"`
+	Size        int64  `json:"size"`
+	Seeders     int    `json:"seeders"`
+	Leechers    int    `json:"leechers"`
+	Freeleech   bool   `json:"freeleech"`
+}
+
+type TorrentSearchResponse struct {
+	Query    string                `json:"query"`
+	Results  []TorrentSearchResult `json:"results"`
+	Warnings []string              `json:"warnings,omitempty"`
+}
+
 type BulkVideoMetadataUpdateResponse struct {
 	UpdatedCount  int          `json:"updated_count"`
 	UpdatedGroups []VideoGroup `json:"updated_groups"`
