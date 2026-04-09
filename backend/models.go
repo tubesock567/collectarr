@@ -161,14 +161,15 @@ type TorrentIndexerResponse struct {
 }
 
 type TorrentSearchResult struct {
-	Title       string `json:"title"`
-	URL         string `json:"url"`
-	DownloadURL string `json:"download_url"`
-	Tracker     string `json:"tracker"`
-	Size        int64  `json:"size"`
-	Seeders     int    `json:"seeders"`
-	Leechers    int    `json:"leechers"`
-	Freeleech   bool   `json:"freeleech"`
+	Title       string     `json:"title"`
+	URL         string     `json:"url"`
+	DownloadURL string     `json:"download_url"`
+	Tracker     string     `json:"tracker"`
+	Size        int64      `json:"size"`
+	Seeders     int        `json:"seeders"`
+	Leechers    int        `json:"leechers"`
+	Freeleech   bool       `json:"freeleech"`
+	Published   *time.Time `json:"published,omitempty"`
 }
 
 type TorrentSearchResponse struct {

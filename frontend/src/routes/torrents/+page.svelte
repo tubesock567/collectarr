@@ -67,6 +67,10 @@
 					valA = a.leechers || 0;
 					valB = b.leechers || 0;
 					break;
+				case 'published':
+					valA = a.published ? new Date(a.published).getTime() : 0;
+					valB = b.published ? new Date(b.published).getTime() : 0;
+					break;
 				default:
 					valA = a.seeders || 0;
 					valB = b.seeders || 0;
@@ -337,6 +341,28 @@
 		return date.toLocaleString();
 	}
 
+	function formatRelativeTime(dateStr) {
+		if (!dateStr) return 'Unknown';
+		const date = new Date(dateStr);
+		const now = new Date();
+		const diffMs = now - date;
+		const diffSec = Math.floor(diffMs / 1000);
+		const diffMin = Math.floor(diffSec / 60);
+		const diffHour = Math.floor(diffMin / 60);
+		const diffDay = Math.floor(diffHour / 24);
+		const diffWeek = Math.floor(diffDay / 7);
+		const diffMonth = Math.floor(diffDay / 30);
+		const diffYear = Math.floor(diffDay / 365);
+
+		if (diffSec < 60) return 'Just now';
+		if (diffMin < 60) return `${diffMin}m ago`;
+		if (diffHour < 24) return `${diffHour}h ago`;
+		if (diffDay < 7) return `${diffDay}d ago`;
+		if (diffWeek < 4) return `${diffWeek}w ago`;
+		if (diffMonth < 12) return `${diffMonth}mo ago`;
+		return `${diffYear}y ago`;
+	}
+
 	function getSortIcon(field) {
 		if (sortBy !== field) {
 			return '<svg class="inline h-3 w-3 ml-1 text-neutral-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>';
@@ -445,6 +471,9 @@
 									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('leechers')}>
 										<span>Leechers</span>{@html getSortIcon('leechers')}
 									</th>
+									<th class="px-4 py-3 cursor-pointer hover:text-white select-none flex items-center" onclick={() => handleSort('published')}>
+										<span>Age</span>{@html getSortIcon('published')}
+									</th>
 									<th class="px-4 py-3"></th>
 								</tr>
 							</thead>
@@ -469,6 +498,7 @@
 										<td class="px-4 py-4 text-neutral-300">{formatBytes(result.size)}</td>
 										<td class="px-4 py-4 text-neutral-300">{result.seeders ?? 0}</td>
 										<td class="px-4 py-4 text-neutral-300">{result.leechers ?? 0}</td>
+										<td class="px-4 py-4 text-neutral-300" title={result.published ? formatDate(result.published) : ''}>{result.published ? formatRelativeTime(result.published) : 'Unknown'}</td>
 										<td class="px-4 py-4">
 											{#if result.download_url}
 												<a 

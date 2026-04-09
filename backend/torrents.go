@@ -39,6 +39,7 @@ type torznabItem struct {
 	GUID        string           `xml:"guid"`
 	Comments    string           `xml:"comments"`
 	Description string           `xml:"description"`
+	PubDate     string           `xml:"pubDate"`
 	Indexer     string           `xml:"jackettindexer"`
 	Size        int64            `xml:"size"`
 	Enclosure   torznabEnclosure `xml:"enclosure"`
@@ -334,6 +335,17 @@ func parseTorznabResults(indexer TorrentIndexer, body []byte) ([]TorrentSearchRe
 			indexer.Tracker,
 		)
 
+		var published *time.Time
+		if item.PubDate != "" {
+			if t, err := time.Parse(time.RFC1123, item.PubDate); err == nil {
+				published = &t
+			} else if t, err := time.Parse(time.RFC1123Z, item.PubDate); err == nil {
+				published = &t
+			} else if t, err := time.Parse(time.RFC3339, item.PubDate); err == nil {
+				published = &t
+			}
+		}
+
 		results = append(results, TorrentSearchResult{
 			Title:       strings.TrimSpace(item.Title),
 			URL:         detailsURL,
@@ -343,6 +355,7 @@ func parseTorznabResults(indexer TorrentIndexer, body []byte) ([]TorrentSearchRe
 			Seeders:     seeders,
 			Leechers:    leechers,
 			Freeleech:   isFreeleech(attrValues),
+			Published:   published,
 		})
 	}
 
