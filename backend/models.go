@@ -177,6 +177,26 @@ type TorrentSearchResponse struct {
 	Warnings []string              `json:"warnings,omitempty"`
 }
 
+type TorrentDownloadHistory struct {
+	ID           int64      `json:"id"`
+	Title        string     `json:"title"`
+	URL          string     `json:"url"`
+	DownloadURL  string     `json:"download_url"`
+	Tracker      string     `json:"tracker"`
+	Size         int64      `json:"size"`
+	Seeders      int        `json:"seeders"`
+	Leechers     int        `json:"leechers"`
+	Freeleech    bool       `json:"freeleech"`
+	DownloadedAt *time.Time `json:"downloaded_at"`
+}
+
+type TorrentHistoryResponse struct {
+	Items       []TorrentDownloadHistory `json:"items"`
+	TotalCount  int                      `json:"total_count"`
+	CurrentPage int                      `json:"current_page"`
+	TotalPages  int                      `json:"total_pages"`
+}
+
 type BulkVideoMetadataUpdateResponse struct {
 	UpdatedCount  int          `json:"updated_count"`
 	UpdatedGroups []VideoGroup `json:"updated_groups"`

@@ -516,3 +516,70 @@ func maskAPIKey(value string) string {
 	}
 	return trimmed[:4] + "••••" + trimmed[len(trimmed)-4:]
 }
+
+func (api *API) handleAddTorrentDownloadHistory(w http.ResponseWriter, r *http.Request) {
+	var item TorrentDownloadHistory
+	if err := json.NewDecoder(r.Body).Decode(&item); err != nil {
+		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid request body"})
+		return
+	}
+
+	now := time.Now()
+	item.DownloadedAt = &now
+
+	if err := api.store.AddTorrentDownloadHistory(item); err != nil {
+		api.logger.Error("add torrent download history failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to record download"})
+		return
+	}
+
+	writeJSON(w, http.StatusCreated, map[string]string{"status": "recorded"})
+}
+
+func (api *API) handleListTorrentDownloadHistory(w http.ResponseWriter, r *http.Request) {
+	pageStr := r.URL.Query().Get("page")
+	perPageStr := r.URL.Query().Get("per_page")
+
+	page := 1
+	if pageStr != "" {
+		if p, err := strconv.Atoi(pageStr); err == nil && p > 0 {
+			page = p
+		}
+	}
+
+	perPage := 20
+	if perPageStr != "" {
+		if pp, err := strconv.Atoi(perPageStr); err == nil && pp > 0 {
+			perPage = pp
+		}
+	}
+
+	items, totalCount, err := api.store.ListTorrentDownloadHistory(page, perPage)
+	if err != nil {
+		api.logger.Error("list torrent download history failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to load history"})
+		return
+	}
+
+	totalPages := (totalCount + perPage - 1) / perPage
+	if totalPages < 1 {
+		totalPages = 1
+	}
+
+	writeJSON(w, http.StatusOK, TorrentHistoryResponse{
+		Items:       items,
+		TotalCount:  totalCount,
+		CurrentPage: page,
+		TotalPages:  totalPages,
+	})
+}
+
+func (api *API) handleClearTorrentDownloadHistory(w http.ResponseWriter, r *http.Request) {
+	if err := api.store.ClearTorrentDownloadHistory(); err != nil {
+		api.logger.Error("clear torrent download history failed", "error", err)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{Error: "failed to clear history"})
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "cleared"})
+}

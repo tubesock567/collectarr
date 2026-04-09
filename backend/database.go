@@ -64,6 +64,22 @@ CREATE TABLE IF NOT EXISTS playlist_items (
 
 const createPlaylistItemsPlaylistIndexSQL = `CREATE INDEX IF NOT EXISTS idx_playlist_items_playlist_id ON playlist_items(playlist_id, position);`
 
+const createTorrentHistoryTableSQL = `
+CREATE TABLE IF NOT EXISTS torrent_download_history (
+	id INTEGER PRIMARY KEY AUTOINCREMENT,
+	title TEXT NOT NULL,
+	url TEXT NOT NULL,
+	download_url TEXT NOT NULL,
+	tracker TEXT NOT NULL,
+	size INTEGER NOT NULL DEFAULT 0,
+	seeders INTEGER NOT NULL DEFAULT 0,
+	leechers INTEGER NOT NULL DEFAULT 0,
+	freeleech INTEGER NOT NULL DEFAULT 0,
+	downloaded_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);`
+
+const createTorrentHistoryDownloadedAtIndexSQL = `CREATE INDEX IF NOT EXISTS idx_torrent_history_downloaded_at ON torrent_download_history(downloaded_at DESC);`
+
 const mediaPathSettingKey = "media_path"
 const generateThumbnailsSettingKey = "generate_thumbnails"
 const generateScrubberSpritesSettingKey = "generate_scrubber_sprites"
@@ -130,6 +146,12 @@ func (s *Store) Init() error {
 	}
 	if _, err := s.db.Exec(createPlaylistItemsPlaylistIndexSQL); err != nil {
 		return fmt.Errorf("create playlist items index: %w", err)
+	}
+	if _, err := s.db.Exec(createTorrentHistoryTableSQL); err != nil {
+		return fmt.Errorf("create torrent history table: %w", err)
+	}
+	if _, err := s.db.Exec(createTorrentHistoryDownloadedAtIndexSQL); err != nil {
+		return fmt.Errorf("create torrent history index: %w", err)
 	}
 	if _, err := s.db.Exec(`DELETE FROM settings WHERE key = 'hard_link_destination'`); err != nil {
 		return fmt.Errorf("remove retired hardlink setting: %w", err)
@@ -1934,4 +1956,72 @@ func (s *Store) GetPlaylistByIDMetaWithoutPrune(id int64) (PlaylistSummary, erro
 	}
 	assignPlaylistSummaryTimes(&playlist, dateCreated, dateUpdated)
 	return playlist, nil
+}
+
+func (s *Store) AddTorrentDownloadHistory(item TorrentDownloadHistory) error {
+	_, err := s.db.Exec(`
+		INSERT INTO torrent_download_history (title, url, download_url, tracker, size, seeders, leechers, freeleech, downloaded_at)
+		VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+		item.Title, item.URL, item.DownloadURL, item.Tracker, item.Size, item.Seeders, item.Leechers, item.Freeleech, item.DownloadedAt)
+	if err != nil {
+		return fmt.Errorf("add torrent download history: %w", err)
+	}
+	return nil
+}
+
+func (s *Store) ListTorrentDownloadHistory(page, perPage int) ([]TorrentDownloadHistory, int, error) {
+	if page < 1 {
+		page = 1
+	}
+	if perPage < 1 {
+		perPage = 20
+	}
+	if perPage > 100 {
+		perPage = 100
+	}
+
+	var totalCount int
+	err := s.db.QueryRow(`SELECT COUNT(*) FROM torrent_download_history`).Scan(&totalCount)
+	if err != nil {
+		return nil, 0, fmt.Errorf("count torrent history: %w", err)
+	}
+
+	offset := (page - 1) * perPage
+	rows, err := s.db.Query(`
+		SELECT id, title, url, download_url, tracker, size, seeders, leechers, freeleech, downloaded_at
+		FROM torrent_download_history
+		ORDER BY downloaded_at DESC
+		LIMIT ? OFFSET ?`, perPage, offset)
+	if err != nil {
+		return nil, 0, fmt.Errorf("query torrent history: %w", err)
+	}
+	defer rows.Close()
+
+	var items []TorrentDownloadHistory
+	for rows.Next() {
+		var item TorrentDownloadHistory
+		var downloadedAt sql.NullTime
+		err := rows.Scan(&item.ID, &item.Title, &item.URL, &item.DownloadURL, &item.Tracker, &item.Size, &item.Seeders, &item.Leechers, &item.Freeleech, &downloadedAt)
+		if err != nil {
+			return nil, 0, fmt.Errorf("scan torrent history: %w", err)
+		}
+		if downloadedAt.Valid {
+			item.DownloadedAt = &downloadedAt.Time
+		}
+		items = append(items, item)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, 0, fmt.Errorf("iterate torrent history: %w", err)
+	}
+
+	return items, totalCount, nil
+}
+
+func (s *Store) ClearTorrentDownloadHistory() error {
+	_, err := s.db.Exec(`DELETE FROM torrent_download_history`)
+	if err != nil {
+		return fmt.Errorf("clear torrent download history: %w", err)
+	}
+	return nil
 }
