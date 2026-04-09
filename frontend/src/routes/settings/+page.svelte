@@ -3,11 +3,14 @@
 	import MetadataTokenInput from '$lib/components/MetadataTokenInput.svelte';
 	import { onMount } from 'svelte';
 	import DirectoryBrowser from '$lib/components/DirectoryBrowser.svelte';
+	import { toast } from '$lib/toast';
 
 	let activeTab = $state('account');
 
 	let scanning = $state(false);
 	let message = $state('');
+	let scanStatus = $state(null);
+	let scanStatusRequestInFlight = $state(false);
 	let generatingThumbs = $state(false);
 	let thumbMessage = $state('');
 	let currentPassword = $state('');
@@ -65,6 +68,15 @@
 		}
 
 		try {
+			const scanStatusRes = await authFetch('/api/scan/status');
+			if (!scanStatusRes.ok)
+				throw new Error(await readError(scanStatusRes, 'Failed to load scan status'));
+			applyScanStatus(await scanStatusRes.json());
+		} catch (err) {
+			message = `Error: ${err.message}`;
+		}
+
+		try {
 			const generationRes = await authFetch('/api/settings/generation');
 			if (!generationRes.ok)
 				throw new Error(await readError(generationRes, 'Failed to load generation settings'));
@@ -97,6 +109,20 @@
 	});
 
 	$effect(() => {
+		const shouldPollScan = activeTab === 'library' || scanStatus?.running;
+		if (!shouldPollScan) {
+			return;
+		}
+
+		fetchScanStatus();
+		const interval = setInterval(() => {
+			fetchScanStatus();
+		}, 2000);
+
+		return () => clearInterval(interval);
+	});
+
+	$effect(() => {
 		if (activeTab !== 'library') {
 			return;
 		}
@@ -124,20 +150,90 @@
 
 	async function scanLibrary() {
 		if (scanning) return;
-		scanning = true;
 		message = '';
 		try {
 			const res = await authFetch('/api/scan', { method: 'POST' });
 			if (!res.ok) throw new Error(await readError(res, 'Scan failed'));
-			message = 'Library scan initiated successfully.';
+			const status = await res.json();
+			applyScanStatus(status);
+			message = status?.message || 'Library scan started.';
+			toast.info('Library scan started');
 		} catch (err) {
 			message = `Error: ${err.message}`;
-		} finally {
-			setTimeout(() => {
-				scanning = false;
-				setTimeout(() => (message = ''), 5000);
-			}, 1000);
+			toast.error(err.message);
 		}
+	}
+
+	async function fetchScanStatus() {
+		if (scanStatusRequestInFlight) return;
+		scanStatusRequestInFlight = true;
+
+		try {
+			const res = await authFetch('/api/scan/status');
+			if (!res.ok) throw new Error(await readError(res, 'Failed to load scan status'));
+			applyScanStatus(await res.json());
+		} catch (err) {
+			if (scanning) {
+				message = `Error: ${err.message}`;
+			}
+		} finally {
+			scanStatusRequestInFlight = false;
+		}
+	}
+
+	function applyScanStatus(status) {
+		const previousStatus = scanStatus?.status;
+		const wasRunning = Boolean(scanStatus?.running);
+		scanStatus = status;
+		scanning = Boolean(status?.running);
+
+		if (!status) {
+			return;
+		}
+
+		if (status.running) {
+			message = status.message || 'Library scan started.';
+			return;
+		}
+
+		if (wasRunning && previousStatus !== status.status) {
+			if (status.status === 'completed') {
+				const changeCount = (status.inserted || 0) + (status.updated || 0);
+				toast.success(
+					`Scan complete: ${status.files_found || 0} files checked, ${changeCount} changes applied`
+				);
+			} else if (status.status === 'failed') {
+				toast.error(status.message || 'Library scan failed');
+			}
+		}
+
+		if (status.message) {
+			message = status.message;
+		}
+	}
+
+	function getScanStatusLabel(status) {
+		if (!status) return 'Idle';
+		if (status.status === 'running') return 'Running';
+		if (status.status === 'completed') return 'Completed';
+		if (status.status === 'failed') return 'Failed';
+		return 'Idle';
+	}
+
+	function getScanPhaseLabel(status) {
+		if (!status?.phase) return 'Waiting';
+		if (status.phase === 'discovering') return 'Discovering files';
+		if (status.phase === 'processing') return 'Updating library';
+		if (status.phase === 'completed') return 'Completed';
+		if (status.phase === 'failed') return 'Failed';
+		return status.phase;
+	}
+
+	function getScanProgressPercent(status) {
+		if (!status) return 0;
+		if (status.status === 'completed') return 100;
+		if (status.phase !== 'processing' || status.files_found <= 0) return 0;
+		return Math.min(100, Math.round((status.processed_files / status.files_found) * 100));
 	}
 
 	async function changePassword() {
@@ -558,37 +654,143 @@
 			aria-labelledby="settings-tab-library"
 		>
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
-				<div>
-					<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">
-						Library Management
-					</h2>
-					<p class="text-xs text-neutral-500">
-						Trigger a manual rescan of your media directory to discover new files.
-					</p>
+				<div class="flex w-full flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+					<div class="max-w-2xl">
+						<h2 class="text-sm font-semibold uppercase tracking-widest text-white mb-1">
+							Library Management
+						</h2>
+						<p class="text-xs text-neutral-500">
+							Run a manual rescan of your media directory and monitor progress in real time.
+						</p>
+					</div>
+
+					<div class="flex flex-wrap items-center gap-3">
+						<button
+							onclick={scanLibrary}
+							disabled={scanning}
+							class="bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
+						>
+							{#if scanning}
+								<span class="loading loading-spinner loading-xs"></span>
+								Scanning...
+							{:else}
+								Rescan Library
+							{/if}
+						</button>
+						<button
+							type="button"
+							onclick={() => {
+								activeTab = 'logs';
+							}}
+							class="border border-neutral-700 px-4 py-3 text-[10px] uppercase tracking-[0.3em] text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white"
+						>
+							View Live Logs
+						</button>
+					</div>
 				</div>
 
-				<button
-					onclick={scanLibrary}
-					disabled={scanning}
-					class="mt-2 bg-white text-black hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500 font-bold uppercase tracking-widest text-xs px-6 py-3 transition-colors flex items-center gap-3"
+				<div
+					class="w-full border border-neutral-800 bg-black p-4 space-y-4"
+					role="status"
+					aria-live="polite"
+					aria-busy={scanning}
 				>
-					{#if scanning}
-						<span class="loading loading-spinner loading-xs"></span>
-						Scanning...
-					{:else}
-						Rescan Library
-					{/if}
-				</button>
+					<div class="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+						<div>
+							<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Scan Job Status</p>
+							<p class="mt-2 text-sm text-white">
+								{getScanStatusLabel(scanStatus)}
+								{#if scanStatus?.phase}
+									· {getScanPhaseLabel(scanStatus)}
+								{/if}
+							</p>
+						</div>
+						<div class="text-right text-[10px] uppercase tracking-[0.3em] text-neutral-500">
+							{#if scanStatus?.phase === 'processing'}
+								{getScanProgressPercent(scanStatus)}%
+							{:else if scanning}
+								Live
+							{:else}
+								Idle
+							{/if}
+						</div>
+					</div>
 
-				{#if message}
-					<p
-						class="text-xs tracking-wide {message.startsWith('Error')
-							? 'text-red-500'
-							: 'text-neutral-400'} mt-2"
-					>
-						{message}
-					</p>
-				{/if}
+					<div class="space-y-2">
+						<div class="h-2 w-full border border-neutral-800 bg-neutral-950 overflow-hidden">
+							{#if scanStatus?.phase === 'processing'}
+								<div
+									class="h-full bg-white transition-all duration-300"
+									style={`width: ${getScanProgressPercent(scanStatus)}%`}
+								></div>
+							{:else if scanning}
+								<div class="h-full w-1/3 bg-white animate-pulse"></div>
+							{:else if scanStatus?.status === 'completed'}
+								<div class="h-full w-full bg-white"></div>
+							{:else}
+								<div class="h-full w-0"></div>
+							{/if}
+						</div>
+						<p class="text-xs text-neutral-500">
+							{#if scanStatus?.phase === 'processing'}
+								Processed {scanStatus.processed_files}/{scanStatus.files_found} files
+							{:else if scanStatus?.phase === 'discovering'}
+								Found {scanStatus.files_found || 0} matching files so far
+							{:else if scanStatus?.status === 'completed'}
+								Last scan checked {scanStatus.files_found || 0} files across {scanStatus.titles_found ||
+									0} titles
+							{:else}
+								No active scan job.
+							{/if}
+						</p>
+					</div>
+
+					<div class="grid gap-3 text-xs text-neutral-400 sm:grid-cols-2 xl:grid-cols-4">
+						<p>Files found: <span class="text-white">{scanStatus?.files_found || 0}</span></p>
+						<p>Titles found: <span class="text-white">{scanStatus?.titles_found || 0}</span></p>
+						<p>Inserted: <span class="text-white">{scanStatus?.inserted || 0}</span></p>
+						<p>Updated: <span class="text-white">{scanStatus?.updated || 0}</span></p>
+						<p>Skipped: <span class="text-white">{scanStatus?.skipped || 0}</span></p>
+						{#if scanStatus?.started_at}
+							<p>
+								Started: <span class="text-white">{formatLogTimestamp(scanStatus.started_at)}</span>
+							</p>
+						{/if}
+						{#if scanStatus?.completed_at}
+							<p>
+								Completed: <span class="text-white"
+									>{formatLogTimestamp(scanStatus.completed_at)}</span
+								>
+							</p>
+						{/if}
+						{#if scanStatus?.media_path}
+							<p class="sm:col-span-2 xl:col-span-4 break-all">
+								Path: <span class="text-white">{scanStatus.media_path}</span>
+							</p>
+						{/if}
+						{#if scanStatus?.current_file}
+							<p class="sm:col-span-2 xl:col-span-4 break-all">
+								Current file: <span class="text-white">{scanStatus.current_file}</span>
+							</p>
+						{/if}
+						{#if scanStatus?.current_title}
+							<p class="sm:col-span-2 xl:col-span-4 break-all">
+								Current title: <span class="text-white">{scanStatus.current_title}</span>
+							</p>
+						{/if}
+					</div>
+
+					{#if scanStatus?.message || message}
+						<p
+							class="text-xs tracking-wide {scanStatus?.status === 'failed' ||
+							message.startsWith('Error')
+								? 'text-red-500'
+								: 'text-neutral-400'}"
+						>
+							{scanStatus?.message || message}
+						</p>
+					{/if}
+				</div>
 			</section>
 
 			<section class="border border-neutral-800 p-6 flex flex-col items-start gap-4">
