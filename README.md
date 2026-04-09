@@ -28,7 +28,7 @@ Collectarr is a self-hosted video library scanner and player. A Go backend scans
    ```
 4. Open `http://localhost:3000`.
 
-The backend listens on port `8080` inside the container and is published as port `3000` on the host. API routes are available under `/api/*`, and the backend serves the frontend build from `/`.
+The backend listens on port `8893` inside the container and is published as port `3000` on the host. API routes are available under `/api/*`, and the backend serves the frontend build from `/`.
 
 ## Environment variables
 
@@ -37,7 +37,7 @@ Docker Compose reads these values from `.env` or your shell:
 - `MEDIA_HOST_PATH` — host path to your video library; mounted into the container at `/media`
 - `MEDIA_PATH` — media path inside the container; defaults to `/media`
 - `DB_PATH` — SQLite database path inside the container; defaults to `/data/collectarr.db`
-- `PORT` — backend listen port inside the container; defaults to `8080`
+- `PORT` — backend listen port inside the container; defaults to `8893`
 
 Example `.env`:
 
@@ -45,7 +45,7 @@ Example `.env`:
 MEDIA_HOST_PATH=/Volumes/media/videos
 MEDIA_PATH=/media
 DB_PATH=/data/collectarr.db
-PORT=8080
+PORT=8893
 ```
 
 ## Development setup
@@ -64,7 +64,7 @@ Useful environment variables for local runs:
 ```bash
 export MEDIA_PATH=/absolute/path/to/media
 export DB_PATH=/absolute/path/to/collectarr.db
-export PORT=8080
+export PORT=8893
 ```
 
 If you want duration probing and thumbnail generation outside Docker, install `ffmpeg` so both `ffmpeg` and `ffprobe` are on your `PATH`.

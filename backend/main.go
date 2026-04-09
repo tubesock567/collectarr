@@ -20,7 +20,7 @@ func main() {
 
 	mediaPath := envOrDefault("MEDIA_PATH", "/media")
 	dbPath := envOrDefault("DB_PATH", "/data/collectarr.db")
-	port := envOrDefault("PORT", "8080")
+	port := envOrDefault("PORT", "8893")
 
 	store, err := NewStore(dbPath, logger)
 	if err != nil {

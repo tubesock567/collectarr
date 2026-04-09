@@ -19,7 +19,7 @@ WORKDIR /app
 
 COPY --from=builder /out/collectarr /usr/local/bin/collectarr
 
-EXPOSE 8080
+EXPOSE 8893
 
 USER collectarr
 
