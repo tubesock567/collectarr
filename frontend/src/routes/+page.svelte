@@ -227,6 +227,9 @@
 			if (res.ok) {
 				continueWatching = await res.json();
 			}
+		} catch (err) {
+			// Silently ignore continue watching errors - it's not critical
+			console.error('Failed to load continue watching:', err);
 		} finally {
 			loadingContinueWatching = false;
 		}
