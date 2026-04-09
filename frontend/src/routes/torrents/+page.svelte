@@ -625,6 +625,7 @@
 								<th class="px-4 py-3">Tracker</th>
 								<th class="px-4 py-3">Size</th>
 								<th class="px-4 py-3">Downloaded</th>
+								<th class="px-4 py-3"></th>
 							</tr>
 						</thead>
 						<tbody class="divide-y divide-neutral-900">
@@ -645,6 +646,23 @@
 									<td class="px-4 py-4 text-neutral-300">{item.tracker || 'Unknown'}</td>
 									<td class="px-4 py-4 text-neutral-300">{formatBytes(item.size)}</td>
 									<td class="px-4 py-4 text-neutral-300">{formatDate(item.downloaded_at)}</td>
+									<td class="px-4 py-4">
+										{#if item.download_url}
+											<a
+												href={item.download_url}
+												download
+												class="inline-flex items-center justify-center text-white transition-colors hover:text-neutral-300"
+												aria-label="Re-download"
+												onclick={() => recordDownload(item)}
+											>
+												<svg class="h-5 w-5" viewBox="0 0 24 24" fill="currentColor">
+													<path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+												</svg>
+											</a>
+										{:else}
+											<span class="text-xs uppercase tracking-[0.25em] text-neutral-600">N/A</span>
+										{/if}
+									</td>
 								</tr>
 							{/each}
 						</tbody>
