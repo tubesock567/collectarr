@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { authFetch } from '$lib/auth';
+	import { toast } from '$lib/toast';
 	import MetadataTokenInput from '$lib/components/MetadataTokenInput.svelte';
 	import VideoCard from '$lib/components/VideoCard.svelte';
 
@@ -39,6 +40,9 @@
 	let savingPlaylist = $state(false);
 	let playlistMessage = $state('');
 	let playlistPanelOverlayEl = $state(null);
+
+	let continueWatching = $state([]);
+	let loadingContinueWatching = $state(true);
 
 	const normalizedSearchQuery = $derived(searchQuery.trim().toLowerCase());
 	const filteredVideos = $derived.by(() => {
@@ -217,6 +221,17 @@
 		}
 	}
 
+	async function loadContinueWatching() {
+		try {
+			const res = await authFetch('/api/videos/continue-watching?limit=8');
+			if (res.ok) {
+				continueWatching = await res.json();
+			}
+		} finally {
+			loadingContinueWatching = false;
+		}
+	}
+
 	function resetBulkDrafts() {
 		bulkAddTags = [];
 		bulkRemoveTags = [];
@@ -334,14 +349,15 @@
 
 			const updatedVideo = await res.json();
 			mergeUpdatedGroups([updatedVideo]);
-			metadataMessage = 'Video details updated.';
+			toast.success('Video details updated');
 			try {
 				await loadMetadataOptions();
 			} catch {
-				metadataMessage = 'Video details updated. Suggestions could not be refreshed.';
+				toast.warning('Video updated but suggestions could not be refreshed');
 			}
 		} catch (err) {
 			metadataMessage = err.message;
+			toast.error(err.message);
 		} finally {
 			savingMetadata = false;
 		}
@@ -361,10 +377,11 @@
 			if (!res.ok) throw new Error(await readError(res, 'Failed to add to playlist'));
 			const playlist = await res.json();
 			const addedCount = Math.max((playlist?.items?.length || 0) - previousCount, 0);
-			playlistMessage =
-				addedCount > 0
-					? `Added ${addedCount} ${addedCount === 1 ? 'item' : 'items'} to playlist.`
-					: 'All selected items were already in that playlist.';
+			if (addedCount > 0) {
+				toast.success(`Added ${addedCount} ${addedCount === 1 ? 'item' : 'items'} to playlist`);
+			} else {
+				toast.info('All selected items were already in that playlist');
+			}
 			await loadPlaylists();
 			setTimeout(() => {
 				showPlaylistPanel = false;
@@ -372,6 +389,7 @@
 			}, 1500);
 		} catch (err) {
 			playlistMessage = err.message;
+			toast.error(err.message);
 		} finally {
 			savingPlaylist = false;
 		}
@@ -392,7 +410,7 @@
 			});
 			if (!res.ok) throw new Error(await readError(res, 'Failed to create playlist'));
 			const playlist = await res.json();
-			playlistMessage = `Playlist created with ${playlist?.items?.length || 0} ${(playlist?.items?.length || 0) === 1 ? 'item' : 'items'}.`;
+			toast.success(`Playlist "${playlist.name}" created with ${playlist?.items?.length || 0} ${(playlist?.items?.length || 0) === 1 ? 'item' : 'items'}`);
 			await loadPlaylists();
 			newPlaylistName = '';
 			setTimeout(() => {
@@ -401,6 +419,7 @@
 			}, 1500);
 		} catch (err) {
 			playlistMessage = err.message;
+			toast.error(err.message);
 		} finally {
 			savingPlaylist = false;
 		}
@@ -432,14 +451,15 @@
 			const data = await res.json();
 			mergeUpdatedGroups(data.updated_groups || []);
 			resetBulkDrafts();
-			metadataMessage = `Updated ${data.updated_count || selectedCount} selected video groups.`;
+			toast.success(`Updated ${data.updated_count || selectedCount} selected video groups`);
 			try {
 				await loadMetadataOptions();
 			} catch {
-				metadataMessage = `Updated ${data.updated_count || selectedCount} selected video groups. Suggestions could not be refreshed.`;
+				toast.warning('Updated videos but suggestions could not be refreshed');
 			}
 		} catch (err) {
 			metadataMessage = err.message;
+			toast.error(err.message);
 		} finally {
 			savingMetadata = false;
 		}
@@ -505,7 +525,7 @@
 
 		(async () => {
 			try {
-				await Promise.all([loadVideos(), loadMetadataOptions(), loadPlaylists()]);
+				await Promise.all([loadVideos(), loadMetadataOptions(), loadPlaylists(), loadContinueWatching()]);
 			} catch (err) {
 				error = err.message;
 			} finally {
@@ -797,38 +817,106 @@
 		</div>
 	{/if}
 
+	{#if !loading && continueWatching.length > 0}
+		<div class="mb-8">
+			<div class="flex items-center justify-between mb-4">
+				<h2 class="text-lg font-bold uppercase tracking-widest text-white">Continue Watching</h2>
+				<a href="/player/{continueWatching[0].video_id}" class="text-xs uppercase tracking-wider text-neutral-400 hover:text-white transition-colors">
+					Resume Latest →
+				</a>
+			</div>
+			<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
+				{#each continueWatching as item (item.video_id)}
+					<a href="/player/{item.video_id}" class="group block">
+						<div class="relative aspect-video bg-neutral-900 border border-neutral-800 overflow-hidden">
+							{#if item.thumbnail_url}
+								<img src={item.thumbnail_url} alt={item.title} class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+							{:else}
+								<div class="w-full h-full flex items-center justify-center">
+									<svg class="w-8 h-8 text-neutral-600" viewBox="0 0 24 24" fill="currentColor">
+										<path d="M8 5v14l11-7z"/>
+									</svg>
+								</div>
+							{/if}
+							<div class="absolute bottom-0 left-0 right-0 h-1 bg-neutral-800">
+								<div class="h-full bg-white" style="width: {item.progress_pct}%"></div>
+							</div>
+							<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+								<div class="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
+									<svg class="w-6 h-6 text-black ml-1" viewBox="0 0 24 24" fill="currentColor">
+										<path d="M8 5v14l11-7z"/>
+									</svg>
+								</div>
+							</div>
+						</div>
+						<div class="mt-2">
+							<p class="text-sm text-white truncate">{item.title}</p>
+							<p class="text-xs text-neutral-500">{Math.round(item.progress_pct)}% watched</p>
+						</div>
+					</a>
+				{/each}
+			</div>
+		</div>
+	{/if}
+
 	{#if loading}
 		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
 			<span class="loading loading-spinner loading-lg text-white"></span>
-			<p class="text-neutral-500 uppercase tracking-widest text-sm">Scanning Library...</p>
+			<p class="text-neutral-500 uppercase tracking-widest text-sm">Loading...</p>
 		</div>
 	{:else if error && videos.length === 0}
 		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-			<p class="text-neutral-500 uppercase tracking-widest text-sm border border-neutral-800 p-8">
-				Error: {error}
-			</p>
+			<div class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md">
+				<div class="w-16 h-16 mb-4 text-neutral-700">
+					<svg viewBox="0 0 24 24" fill="currentColor">
+						<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
+					</svg>
+				</div>
+				<p class="text-neutral-400 uppercase tracking-widest mb-4">Error Loading Library</p>
+				<p class="text-sm text-neutral-600 mb-6">{error}</p>
+				<button onclick={() => window.location.reload()} class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors">
+					Retry
+				</button>
+			</div>
 		</div>
 	{:else if videos.length === 0}
 		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-			<div class="border border-neutral-800 p-12 flex flex-col items-center text-center max-w-md">
-				<p class="text-neutral-400 uppercase tracking-widest mb-4">No Videos Found</p>
+			<div class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md">
+				<div class="w-16 h-16 mb-4 text-neutral-700">
+					<svg viewBox="0 0 24 24" fill="currentColor">
+						<path d="M9.75 15.5a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 1 1.13-.65l4.5 2.25a.75.75 0 0 1 0 1.34l-4.5 2.25a.75.75 0 0 1-.38.1Z"/>
+						<path d="M2 6.5a4 4 0 0 1 4-4h12a4 4 0 0 1 4 4v11a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4v-11Zm4-2.5a2.5 2.5 0 0 0-2.5 2.5v11a2.5 2.5 0 0 0 2.5 2.5h12a2.5 2.5 0 0 0 2.5-2.5v-11a2.5 2.5 0 0 0-2.5-2.5H6Z"/>
+					</svg>
+				</div>
+				<p class="text-neutral-400 uppercase tracking-widest mb-4">Welcome to Collectarr</p>
+				<p class="text-sm text-neutral-600 mb-2">
+					Your video library is empty.
+				</p>
 				<p class="text-sm text-neutral-600 mb-6">
-					Your library is currently empty or scanning is still in progress.
+					Add your media path in settings and run a scan to get started.
 				</p>
 				<a
 					href="/settings"
-					class="btn btn-outline btn-sm text-white rounded-none uppercase tracking-widest text-xs"
+					class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
 					>Go to Settings</a
 				>
 			</div>
 		</div>
 	{:else if filteredVideos.length === 0}
 		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-			<div
-				class="border border-neutral-800 bg-black p-12 flex flex-col items-center text-center max-w-md"
-			>
+			<div class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md">
+				<div class="w-16 h-16 mb-4 text-neutral-700">
+					<svg viewBox="0 0 24 24" fill="currentColor">
+						<path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 0 0 1.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 0 0-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 0 0 5.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
+					</svg>
+				</div>
 				<p class="text-neutral-400 uppercase tracking-widest mb-4">No Matching Videos</p>
-				<p class="text-sm text-neutral-600">Try a different title or date-added search.</p>
+				<p class="text-sm text-neutral-600 mb-6">
+					No videos found matching "{searchQuery}".
+				</p>
+				<button onclick={() => { searchQuery = ''; currentPage = 1; }} class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors">
+					Clear Search
+				</button>
 			</div>
 		</div>
 	{:else}
