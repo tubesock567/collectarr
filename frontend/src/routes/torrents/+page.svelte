@@ -338,8 +338,8 @@
 	}
 
 	function getSortIcon(field) {
-		if (sortBy !== field) return '↕️';
-		return sortOrder === 'asc' ? '↑' : '↓';
+		if (sortBy !== field) return '';
+		return sortOrder === 'asc' ? ' ^' : ' v';
 	}
 </script>
 
