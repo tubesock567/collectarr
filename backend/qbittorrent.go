@@ -48,6 +48,7 @@ type qbittorrentWebUITorrent struct {
 	Tags          string  `json:"tags"`
 	AddedOn       int64   `json:"added_on"`
 	CompletionOn  int64   `json:"completion_on"`
+	SeedingTime   int64   `json:"seeding_time"`
 }
 
 func (api *API) handleGetQBittorrentSettings(w http.ResponseWriter, r *http.Request) {
@@ -232,6 +233,7 @@ func (c *QBittorrentClient) ListTorrents(ctx context.Context) ([]QBittorrentTorr
 			Tags:          item.Tags,
 			AddedOn:       item.AddedOn,
 			CompletionOn:  item.CompletionOn,
+			SeedingTime:   item.SeedingTime,
 		})
 	}
 

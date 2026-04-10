@@ -277,6 +277,7 @@ type QBittorrentTorrent struct {
 	Tags          string  `json:"tags,omitempty"`
 	AddedOn       int64   `json:"added_on,omitempty"`
 	CompletionOn  int64   `json:"completion_on,omitempty"`
+	SeedingTime   int64   `json:"seeding_time,omitempty"`
 }
 
 type QBittorrentTorrentsResponse struct {
