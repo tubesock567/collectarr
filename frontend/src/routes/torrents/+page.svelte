@@ -169,7 +169,8 @@
 		{ id: 'tags', label: 'Tags' },
 		{ id: 'save_path', label: 'Save Path' },
 		{ id: 'added_on', label: 'Added' },
-		{ id: 'completion_on', label: 'Completed' }
+		{ id: 'completion_on', label: 'Completed' },
+		{ id: 'seeding_time', label: 'Seeding Time' }
 	];
 	let activeQbitColumns = $derived($preferences.qbitColumns || ['name']);
 
@@ -349,6 +350,16 @@
 	function formatTimestamp(unixSeconds) {
 		if (!unixSeconds || unixSeconds <= 0) return '—';
 		return new Date(unixSeconds * 1000).toLocaleString();
+	}
+
+	function formatDuration(seconds) {
+		if (!seconds || seconds <= 0) return '—';
+		const days = Math.floor(seconds / 86400);
+		const hours = Math.floor((seconds % 86400) / 3600);
+		const mins = Math.floor((seconds % 3600) / 60);
+		if (days > 0) return `${days}d ${hours}h`;
+		if (hours > 0) return `${hours}h ${mins}m`;
+		return `${mins}m`;
 	}
 
 	// Auto-refresh history when tab is active
@@ -665,7 +676,7 @@
 	}
 
 	function formatBytes(bytes) {
-		if (!bytes || bytes <= 0) return 'Unknown';
+		if (!bytes || bytes <= 0) return '—';
 		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
 		let value = bytes;
 		let index = 0;
@@ -685,13 +696,13 @@
 	}
 
 	function formatDate(dateStr) {
-		if (!dateStr) return 'Unknown';
+		if (!dateStr) return '—';
 		const date = new Date(dateStr);
 		return date.toLocaleString();
 	}
 
 	function formatRelativeTime(dateStr) {
-		if (!dateStr) return 'Unknown';
+		if (!dateStr) return '—';
 		const date = new Date(dateStr);
 		const now = new Date();
 		const diffMs = now - date;
@@ -984,7 +995,7 @@
 												</div>
 											</div>
 										</td>
-										<td class="px-4 py-4 text-neutral-300">{result.tracker || 'Unknown'}</td>
+										<td class="px-4 py-4 text-neutral-300">{result.tracker || '—'}</td>
 										<td class="px-4 py-4 text-neutral-300">{formatBytes(result.size)}</td>
 										<td
 											class="px-4 py-4 {result.seeders >= 50
@@ -997,7 +1008,7 @@
 										<td
 											class="px-4 py-4 text-neutral-300"
 											title={result.published ? formatDate(result.published) : ''}
-											>{result.published ? formatRelativeTime(result.published) : 'Unknown'}</td
+											>{result.published ? formatRelativeTime(result.published) : '—'}</td
 										>
 										<td class="px-4 py-4">
 											{#if result.download_url}
@@ -1230,6 +1241,7 @@
 									{#if activeQbitColumns.includes('save_path')}<th class="px-4 py-3">Save Path</th>{/if}
 									{#if activeQbitColumns.includes('added_on')}<th class="px-4 py-3">Added</th>{/if}
 									{#if activeQbitColumns.includes('completion_on')}<th class="px-4 py-3">Completed</th>{/if}
+									{#if activeQbitColumns.includes('seeding_time')}<th class="px-4 py-3">Seeding Time</th>{/if}
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-neutral-900">
@@ -1241,7 +1253,7 @@
 											</td>
 										{/if}
 										{#if activeQbitColumns.includes('state')}
-											<td class="px-4 py-3 text-neutral-300 capitalize">{torrent.state || 'Unknown'}</td>
+											<td class="px-4 py-3 text-neutral-300 capitalize">{torrent.state || '—'}</td>
 										{/if}
 										{#if activeQbitColumns.includes('progress')}
 											<td class="px-4 py-3 text-neutral-300">
@@ -1296,6 +1308,9 @@
 										{/if}
 										{#if activeQbitColumns.includes('completion_on')}
 											<td class="px-4 py-3 text-neutral-300">{formatTimestamp(torrent.completion_on)}</td>
+										{/if}
+										{#if activeQbitColumns.includes('seeding_time')}
+											<td class="px-4 py-3 text-neutral-300">{formatDuration(torrent.seeding_time)}</td>
 										{/if}
 									</tr>
 								{/each}
@@ -1495,7 +1510,7 @@
 											{/if}
 										</div>
 									</td>
-									<td class="px-4 py-4 text-neutral-300">{item.tracker || 'Unknown'}</td>
+									<td class="px-4 py-4 text-neutral-300">{item.tracker || '—'}</td>
 									<td class="px-4 py-4 text-neutral-300">{formatBytes(item.size)}</td>
 									<td class="px-4 py-4 text-neutral-300">
 										<span
@@ -1504,7 +1519,7 @@
 											class:text-red-400={item.status === 'failed'}
 											class="text-xs uppercase tracking-[0.25em]"
 										>
-											{item.status || 'Unknown'}
+											{item.status || '—'}
 										</span>
 									</td>
 									<td class="px-4 py-4 text-neutral-300">{formatDate(item.downloaded_at)}</td>
