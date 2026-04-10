@@ -14,6 +14,48 @@ const defaultPreferences = {
 		'upload_speed',
 		'eta',
 		'ratio'
+	],
+	qbitColumnWidths: {
+		name: 250,
+		state: 80,
+		progress: 100,
+		total_size: 80,
+		downloaded: 80,
+		uploaded: 80,
+		ratio: 60,
+		eta: 80,
+		seeds: 60,
+		peers: 60,
+		download_speed: 100,
+		upload_speed: 100,
+		category: 100,
+		tags: 100,
+		save_path: 200,
+		added_on: 150,
+		completion_on: 150,
+		seeding_time: 100,
+		tracker: 40
+	},
+	qbitColumnOrder: [
+		'tracker',
+		'name',
+		'state',
+		'progress',
+		'total_size',
+		'downloaded',
+		'uploaded',
+		'ratio',
+		'eta',
+		'seeds',
+		'peers',
+		'download_speed',
+		'upload_speed',
+		'category',
+		'tags',
+		'save_path',
+		'added_on',
+		'completion_on',
+		'seeding_time'
 	]
 };
 
@@ -72,6 +114,24 @@ function createPreferencesStore() {
 		updateQbitColumns(columns) {
 			update((current) => {
 				const next = { ...current, qbitColumns: columns };
+				if (browser) {
+					applyPreferences(next);
+				}
+				return next;
+			});
+		},
+		updateQbitColumnWidths(widths) {
+			update((current) => {
+				const next = { ...current, qbitColumnWidths: { ...current.qbitColumnWidths, ...widths } };
+				if (browser) {
+					applyPreferences(next);
+				}
+				return next;
+			});
+		},
+		updateQbitColumnOrder(order) {
+			update((current) => {
+				const next = { ...current, qbitColumnOrder: order };
 				if (browser) {
 					applyPreferences(next);
 				}
