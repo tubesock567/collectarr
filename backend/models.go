@@ -238,6 +238,59 @@ type TorrentHistoryResponse struct {
 	TotalPages  int                      `json:"total_pages"`
 }
 
+type QBittorrentSettings struct {
+	BaseURL  string `json:"base_url"`
+	Username string `json:"username"`
+	Password string `json:"password,omitempty"`
+}
+
+type QBittorrentSettingsRequest struct {
+	BaseURL  string `json:"base_url"`
+	Username string `json:"username"`
+	Password string `json:"password"`
+}
+
+type QBittorrentSettingsResponse struct {
+	BaseURL        string `json:"base_url"`
+	Username       string `json:"username"`
+	HasPassword    bool   `json:"has_password"`
+	MaskedPassword string `json:"masked_password,omitempty"`
+}
+
+type QBittorrentTorrent struct {
+	Hash          string  `json:"hash"`
+	Name          string  `json:"name"`
+	State         string  `json:"state"`
+	Progress      float64 `json:"progress"`
+	Size          int64   `json:"size"`
+	TotalSize     int64   `json:"total_size"`
+	Downloaded    int64   `json:"downloaded"`
+	Uploaded      int64   `json:"uploaded"`
+	Ratio         float64 `json:"ratio"`
+	NumSeeds      int     `json:"num_seeds"`
+	NumLeechers   int     `json:"num_leechers"`
+	DownloadSpeed int64   `json:"download_speed"`
+	UploadSpeed   int64   `json:"upload_speed"`
+	ETA           int64   `json:"eta"`
+	SavePath      string  `json:"save_path,omitempty"`
+	Category      string  `json:"category,omitempty"`
+	Tags          string  `json:"tags,omitempty"`
+	AddedOn       int64   `json:"added_on,omitempty"`
+	CompletionOn  int64   `json:"completion_on,omitempty"`
+}
+
+type QBittorrentTorrentsResponse struct {
+	Items []QBittorrentTorrent `json:"items"`
+}
+
+type QBittorrentAddTorrentRequest struct {
+	URL string `json:"url"`
+}
+
+type QBittorrentAddTorrentResponse struct {
+	Status string `json:"status"`
+}
+
 type BulkVideoMetadataUpdateResponse struct {
 	UpdatedCount  int          `json:"updated_count"`
 	UpdatedGroups []VideoGroup `json:"updated_groups"`
