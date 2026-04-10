@@ -151,6 +151,30 @@
 	let qbitMonitorInterval = null;
 	let qbitConfigDirty = $state(false);
 	let qbitTabInitToken = 0;
+	let showQbitColumnDropdown = $state(false);
+	let qbitColumnDropdownEl = $state(null);
+
+	// Column width state for resizable columns
+	let qbitColumnWidths = $state({
+		name: 250,
+		state: 80,
+		progress: 100,
+		total_size: 80,
+		downloaded: 80,
+		uploaded: 80,
+		ratio: 60,
+		eta: 80,
+		seeds: 60,
+		peers: 60,
+		download_speed: 100,
+		upload_speed: 100,
+		category: 100,
+		tags: 100,
+		save_path: 200,
+		added_on: 150,
+		completion_on: 150,
+		seeding_time: 100
+	});
 
 	// qBittorrent sorting state
 	let qbitSortBy = $state('name');
@@ -484,10 +508,20 @@
 
 		// Keyboard shortcuts
 		document.addEventListener('keydown', handleKeydown);
+		
+		// Click outside handler for column dropdown
+		const handleClickOutside = (event) => {
+			if (qbitColumnDropdownEl && !qbitColumnDropdownEl.contains(event.target)) {
+				showQbitColumnDropdown = false;
+			}
+		};
+		document.addEventListener('click', handleClickOutside);
+		
 		return () => {
 			qbitTabInitToken += 1;
 			clearQbitMonitorInterval();
 			document.removeEventListener('keydown', handleKeydown);
+			document.removeEventListener('click', handleClickOutside);
 		};
 	});
 
@@ -1283,7 +1317,7 @@
 					<div>
 						<h2 class="text-sm font-semibold uppercase tracking-widest text-white">Torrents Monitor</h2>
 						<p class="mt-1 text-xs text-neutral-500">
-							Live qBittorrent details. Toggle cols below. Table scrolls horizontally inside panel.
+							Live qBittorrent details. Toggle columns from the menu. Drag column borders to resize.
 						</p>
 						{#if qbitLastUpdated}
 							<p class="mt-2 text-[10px] uppercase tracking-[0.25em] text-neutral-600">
@@ -1291,25 +1325,44 @@
 							</p>
 						{/if}
 					</div>
-					<div class="flex flex-wrap gap-4 items-center justify-end">
+					<div class="flex flex-wrap gap-3 items-center justify-end">
 						<button
 							onclick={loadQbitTorrents}
-							class="border border-neutral-700 px-3 py-2 text-[11px] uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
+							class="h-9 w-9 flex items-center justify-center border border-neutral-600 bg-neutral-900 text-neutral-300 transition-colors hover:border-neutral-400 hover:text-white"
+							aria-label="Refresh torrents"
+							disabled={qbitMonitorLoading}
 						>
-							Refresh
+							<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor">
+								<path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"/>
+							</svg>
 						</button>
-						<span class="text-[10px] uppercase tracking-[0.25em] text-neutral-500">Columns:</span>
-						{#each allQbitColumns as col}
-							<label class="flex items-center gap-1 cursor-pointer">
-								<input
-									type="checkbox"
-									checked={activeQbitColumns.includes(col.id)}
-									onchange={() => toggleQbitColumn(col.id)}
-									class="accent-neutral-500"
-								/>
-								<span class="text-[10px] uppercase tracking-widest text-neutral-400">{col.label}</span>
-							</label>
-						{/each}
+						<div class="relative" bind:this={qbitColumnDropdownEl}>
+							<button
+								class="flex h-9 items-center justify-center gap-2 border border-neutral-600 bg-neutral-900 px-3 text-[10px] uppercase tracking-[0.25em] text-white transition-colors hover:border-neutral-400"
+								onclick={() => showQbitColumnDropdown = !showQbitColumnDropdown}
+								aria-label="Column options"
+							>
+								<span>Columns</span>
+								<svg class="w-4 h-4 shrink-0" viewBox="0 0 24 24" fill="currentColor">
+									<path d="M7 10l5 5 5-5z"/>
+								</svg>
+							</button>
+							{#if showQbitColumnDropdown}
+								<div class="absolute right-0 top-full z-20 mt-1 w-48 border border-neutral-600 bg-black shadow-xl max-h-64 overflow-y-auto">
+									{#each allQbitColumns as col}
+										<label class="flex items-center gap-2 px-3 py-2 hover:bg-neutral-900 cursor-pointer">
+											<input
+												type="checkbox"
+												checked={activeQbitColumns.includes(col.id)}
+												onchange={() => toggleQbitColumn(col.id)}
+												class="accent-neutral-500"
+											/>
+											<span class="text-xs text-neutral-300">{col.label}</span>
+										</label>
+									{/each}
+								</div>
+							{/if}
+						</div>
 					</div>
 				</div>
 				
@@ -1331,96 +1384,96 @@
 					</div>
 				{:else}
 					<div class="overflow-x-auto border border-neutral-800 bg-black">
-						<table class="min-w-max divide-y divide-neutral-800 text-left text-sm whitespace-nowrap">
+						<table class="w-full divide-y divide-neutral-800 text-left text-sm" style="table-layout: fixed;">
 							<thead class="bg-neutral-950 text-[11px] uppercase tracking-[0.25em] text-neutral-400">
 								<tr>
-									{#if activeQbitColumns.includes('name')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('name')}>Name {@html getQbitSortIcon('name')}</th>{/if}
-									{#if activeQbitColumns.includes('state')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('state')}>State {@html getQbitSortIcon('state')}</th>{/if}
-									{#if activeQbitColumns.includes('progress')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('progress')}>Progress {@html getQbitSortIcon('progress')}</th>{/if}
-									{#if activeQbitColumns.includes('total_size')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('total_size')}>Size {@html getQbitSortIcon('total_size')}</th>{/if}
-									{#if activeQbitColumns.includes('downloaded')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('downloaded')}>Done {@html getQbitSortIcon('downloaded')}</th>{/if}
-									{#if activeQbitColumns.includes('uploaded')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('uploaded')}>Uploaded {@html getQbitSortIcon('uploaded')}</th>{/if}
-									{#if activeQbitColumns.includes('ratio')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('ratio')}>Ratio {@html getQbitSortIcon('ratio')}</th>{/if}
-									{#if activeQbitColumns.includes('eta')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('eta')}>ETA {@html getQbitSortIcon('eta')}</th>{/if}
-									{#if activeQbitColumns.includes('seeds')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('seeds')}>Seeds {@html getQbitSortIcon('seeds')}</th>{/if}
-									{#if activeQbitColumns.includes('peers')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('peers')}>Peers {@html getQbitSortIcon('peers')}</th>{/if}
-									{#if activeQbitColumns.includes('download_speed')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('download_speed')}>DL Speed {@html getQbitSortIcon('download_speed')}</th>{/if}
-									{#if activeQbitColumns.includes('upload_speed')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('upload_speed')}>UP Speed {@html getQbitSortIcon('upload_speed')}</th>{/if}
-									{#if activeQbitColumns.includes('category')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('category')}>Category {@html getQbitSortIcon('category')}</th>{/if}
-									{#if activeQbitColumns.includes('tags')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('tags')}>Tags {@html getQbitSortIcon('tags')}</th>{/if}
-									{#if activeQbitColumns.includes('save_path')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('save_path')}>Save Path {@html getQbitSortIcon('save_path')}</th>{/if}
-									{#if activeQbitColumns.includes('added_on')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('added_on')}>Added {@html getQbitSortIcon('added_on')}</th>{/if}
-									{#if activeQbitColumns.includes('completion_on')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('completion_on')}>Completed {@html getQbitSortIcon('completion_on')}</th>{/if}
-									{#if activeQbitColumns.includes('seeding_time')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('seeding_time')}>Seeding Time {@html getQbitSortIcon('seeding_time')}</th>{/if}
+									{#if activeQbitColumns.includes('name')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.name}px" onclick={() => handleQbitSort('name')}><div class="flex items-center justify-between"><span class="truncate">Name</span>{@html getQbitSortIcon('name')}</div></th>{/if}
+									{#if activeQbitColumns.includes('state')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.state}px" onclick={() => handleQbitSort('state')}><div class="flex items-center justify-between"><span class="truncate">State</span>{@html getQbitSortIcon('state')}</div></th>{/if}
+									{#if activeQbitColumns.includes('progress')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.progress}px" onclick={() => handleQbitSort('progress')}><div class="flex items-center justify-between"><span class="truncate">Progress</span>{@html getQbitSortIcon('progress')}</div></th>{/if}
+									{#if activeQbitColumns.includes('total_size')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.total_size}px" onclick={() => handleQbitSort('total_size')}><div class="flex items-center justify-between"><span class="truncate">Size</span>{@html getQbitSortIcon('total_size')}</div></th>{/if}
+									{#if activeQbitColumns.includes('downloaded')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.downloaded}px" onclick={() => handleQbitSort('downloaded')}><div class="flex items-center justify-between"><span class="truncate">Done</span>{@html getQbitSortIcon('downloaded')}</div></th>{/if}
+									{#if activeQbitColumns.includes('uploaded')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.uploaded}px" onclick={() => handleQbitSort('uploaded')}><div class="flex items-center justify-between"><span class="truncate">Uploaded</span>{@html getQbitSortIcon('uploaded')}</div></th>{/if}
+									{#if activeQbitColumns.includes('ratio')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.ratio}px" onclick={() => handleQbitSort('ratio')}><div class="flex items-center justify-between"><span class="truncate">Ratio</span>{@html getQbitSortIcon('ratio')}</div></th>{/if}
+									{#if activeQbitColumns.includes('eta')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.eta}px" onclick={() => handleQbitSort('eta')}><div class="flex items-center justify-between"><span class="truncate">ETA</span>{@html getQbitSortIcon('eta')}</div></th>{/if}
+									{#if activeQbitColumns.includes('seeds')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.seeds}px" onclick={() => handleQbitSort('seeds')}><div class="flex items-center justify-between"><span class="truncate">Seeds</span>{@html getQbitSortIcon('seeds')}</div></th>{/if}
+									{#if activeQbitColumns.includes('peers')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.peers}px" onclick={() => handleQbitSort('peers')}><div class="flex items-center justify-between"><span class="truncate">Peers</span>{@html getQbitSortIcon('peers')}</div></th>{/if}
+									{#if activeQbitColumns.includes('download_speed')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.download_speed}px" onclick={() => handleQbitSort('download_speed')}><div class="flex items-center justify-between"><span class="truncate">DL Speed</span>{@html getQbitSortIcon('download_speed')}</div></th>{/if}
+									{#if activeQbitColumns.includes('upload_speed')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.upload_speed}px" onclick={() => handleQbitSort('upload_speed')}><div class="flex items-center justify-between"><span class="truncate">UP Speed</span>{@html getQbitSortIcon('upload_speed')}</div></th>{/if}
+									{#if activeQbitColumns.includes('category')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.category}px" onclick={() => handleQbitSort('category')}><div class="flex items-center justify-between"><span class="truncate">Category</span>{@html getQbitSortIcon('category')}</div></th>{/if}
+									{#if activeQbitColumns.includes('tags')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.tags}px" onclick={() => handleQbitSort('tags')}><div class="flex items-center justify-between"><span class="truncate">Tags</span>{@html getQbitSortIcon('tags')}</div></th>{/if}
+									{#if activeQbitColumns.includes('save_path')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.save_path}px" onclick={() => handleQbitSort('save_path')}><div class="flex items-center justify-between"><span class="truncate">Save Path</span>{@html getQbitSortIcon('save_path')}</div></th>{/if}
+									{#if activeQbitColumns.includes('added_on')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.added_on}px" onclick={() => handleQbitSort('added_on')}><div class="flex items-center justify-between"><span class="truncate">Added</span>{@html getQbitSortIcon('added_on')}</div></th>{/if}
+									{#if activeQbitColumns.includes('completion_on')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.completion_on}px" onclick={() => handleQbitSort('completion_on')}><div class="flex items-center justify-between"><span class="truncate">Completed</span>{@html getQbitSortIcon('completion_on')}</div></th>{/if}
+									{#if activeQbitColumns.includes('seeding_time')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none overflow-hidden" style="width: {qbitColumnWidths.seeding_time}px" onclick={() => handleQbitSort('seeding_time')}><div class="flex items-center justify-between"><span class="truncate">Seeding Time</span>{@html getQbitSortIcon('seeding_time')}</div></th>{/if}
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-neutral-900">
 								{#each sortedQbitTorrents as torrent (torrent.hash)}
 									<tr class="align-middle hover:bg-neutral-950/70">
 										{#if activeQbitColumns.includes('name')}
-											<td class="max-w-sm px-4 py-3 text-white" title={torrent.name}>
-												<p class="max-w-sm truncate font-medium">{torrent.name}</p>
+											<td class="px-4 py-3 text-white overflow-hidden" style="width: {qbitColumnWidths.name}px" title={torrent.name}>
+												<p class="truncate font-medium">{torrent.name}</p>
 											</td>
 										{/if}
 										{#if activeQbitColumns.includes('state')}
-											<td class="px-4 py-3 text-neutral-300 capitalize">{torrent.state || '—'}</td>
+											<td class="px-4 py-3 text-neutral-300 capitalize overflow-hidden" style="width: {qbitColumnWidths.state}px">{torrent.state || '—'}</td>
 										{/if}
 										{#if activeQbitColumns.includes('progress')}
-											<td class="px-4 py-3 text-neutral-300">
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.progress}px">
 												<div class="flex items-center gap-2">
-													<div class="h-1.5 w-24 overflow-hidden bg-neutral-800">
+													<div class="h-1.5 flex-1 max-w-24 overflow-hidden bg-neutral-800">
 														<div class="h-full bg-blue-500" style={`width: ${Math.max(0, Math.min(100, (torrent.progress || 0) * 100))}%`}></div>
 													</div>
-													<span class="text-[10px] uppercase tracking-[0.25em]">{formatProgress(torrent.progress)}</span>
+													<span class="text-[10px] uppercase tracking-[0.25em] shrink-0">{formatProgress(torrent.progress)}</span>
 												</div>
 											</td>
 										{/if}
 										{#if activeQbitColumns.includes('total_size')}
-											<td class="px-4 py-3 text-neutral-300">{formatBytes(torrent.total_size)}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.total_size}px">{formatBytes(torrent.total_size)}</td>
 										{/if}
 										{#if activeQbitColumns.includes('downloaded')}
-											<td class="px-4 py-3 text-neutral-300">{formatBytes(torrent.downloaded)}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.downloaded}px">{formatBytes(torrent.downloaded)}</td>
 										{/if}
 										{#if activeQbitColumns.includes('uploaded')}
-											<td class="px-4 py-3 text-neutral-300">{formatBytes(torrent.uploaded)}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.uploaded}px">{formatBytes(torrent.uploaded)}</td>
 										{/if}
 										{#if activeQbitColumns.includes('ratio')}
-											<td class="px-4 py-3 text-neutral-300">{formatRatio(torrent.ratio)}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.ratio}px">{formatRatio(torrent.ratio)}</td>
 										{/if}
 										{#if activeQbitColumns.includes('eta')}
-											<td class="px-4 py-3 text-neutral-300">{formatETA(torrent.eta)}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.eta}px">{formatETA(torrent.eta)}</td>
 										{/if}
 										{#if activeQbitColumns.includes('seeds')}
-											<td class="px-4 py-3 text-emerald-500">{torrent.num_seeds}</td>
+											<td class="px-4 py-3 text-emerald-500 overflow-hidden" style="width: {qbitColumnWidths.seeds}px">{torrent.num_seeds}</td>
 										{/if}
 										{#if activeQbitColumns.includes('peers')}
-											<td class="px-4 py-3 text-blue-500">{torrent.num_leechers}</td>
+											<td class="px-4 py-3 text-blue-500 overflow-hidden" style="width: {qbitColumnWidths.peers}px">{torrent.num_leechers}</td>
 										{/if}
 										{#if activeQbitColumns.includes('download_speed')}
-											<td class="px-4 py-3 text-neutral-300">{formatSpeed(torrent.download_speed)}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.download_speed}px">{formatSpeed(torrent.download_speed)}</td>
 										{/if}
 										{#if activeQbitColumns.includes('upload_speed')}
-											<td class="px-4 py-3 text-neutral-300">{formatSpeed(torrent.upload_speed)}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.upload_speed}px">{formatSpeed(torrent.upload_speed)}</td>
 										{/if}
 										{#if activeQbitColumns.includes('category')}
-											<td class="px-4 py-3 text-neutral-300">{torrent.category || '—'}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden truncate" style="width: {qbitColumnWidths.category}px">{torrent.category || '—'}</td>
 										{/if}
 										{#if activeQbitColumns.includes('tags')}
-											<td class="px-4 py-3 text-neutral-300">{torrent.tags || '—'}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden truncate" style="width: {qbitColumnWidths.tags}px">{torrent.tags || '—'}</td>
 										{/if}
 										{#if activeQbitColumns.includes('save_path')}
-											<td class="max-w-sm px-4 py-3 text-neutral-300" title={torrent.save_path}>
-												<p class="max-w-sm truncate">{torrent.save_path || '—'}</p>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.save_path}px" title={torrent.save_path}>
+												<p class="truncate">{torrent.save_path || '—'}</p>
 											</td>
 										{/if}
 										{#if activeQbitColumns.includes('added_on')}
-											<td class="px-4 py-3 text-neutral-300">{formatTimestamp(torrent.added_on)}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.added_on}px">{formatTimestamp(torrent.added_on)}</td>
 										{/if}
 										{#if activeQbitColumns.includes('completion_on')}
-											<td class="px-4 py-3 text-neutral-300">{formatTimestamp(torrent.completion_on)}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.completion_on}px">{formatTimestamp(torrent.completion_on)}</td>
 										{/if}
 										{#if activeQbitColumns.includes('seeding_time')}
-											<td class="px-4 py-3 text-neutral-300">{formatDuration(torrent.seeding_time)}</td>
+											<td class="px-4 py-3 text-neutral-300 overflow-hidden" style="width: {qbitColumnWidths.seeding_time}px">{formatDuration(torrent.seeding_time)}</td>
 										{/if}
 									</tr>
 								{/each}
