@@ -149,6 +149,8 @@
 	let qbitMonitorMessage = $state('');
 	let qbitLastUpdated = $state('');
 	let qbitMonitorInterval = null;
+	let qbitConfigDirty = $state(false);
+	let qbitTabInitToken = 0;
 
 	const allQbitColumns = [
 		{ id: 'name', label: 'Name' },
@@ -185,28 +187,51 @@
 		preferences.updateQbitColumns(current);
 	}
 
-	$effect(() => {
-		if (activeTab === 'qbittorrent') {
-			loadQbitConfig();
-			loadQbitTorrents();
-			if (!qbitMonitorInterval) {
-				qbitMonitorInterval = setInterval(loadQbitTorrents, 3000);
-			}
-			return () => {
-				if (qbitMonitorInterval) {
-					clearInterval(qbitMonitorInterval);
-					qbitMonitorInterval = null;
-				}
-			};
-		}
-
+	function clearQbitMonitorInterval() {
 		if (qbitMonitorInterval) {
 			clearInterval(qbitMonitorInterval);
 			qbitMonitorInterval = null;
 		}
-	});
+	}
 
-	async function loadQbitConfig() {
+	function markQbitConfigDirty() {
+		qbitConfigDirty = true;
+	}
+
+	async function initializeQbitTab(token) {
+		await loadQbitConfig();
+		if (token !== qbitTabInitToken || activeTab !== 'qbittorrent') {
+			return;
+		}
+		await loadQbitTorrents();
+		if (token !== qbitTabInitToken || activeTab !== 'qbittorrent') {
+			return;
+		}
+		clearQbitMonitorInterval();
+		qbitMonitorInterval = setInterval(() => {
+			void loadQbitTorrents();
+		}, 3000);
+	}
+
+	function selectTab(tabId) {
+		if (activeTab === tabId) {
+			return;
+		}
+
+		if (activeTab === 'qbittorrent' && tabId !== 'qbittorrent') {
+			qbitTabInitToken += 1;
+			clearQbitMonitorInterval();
+		}
+
+		activeTab = tabId;
+
+		if (tabId === 'qbittorrent') {
+			const token = ++qbitTabInitToken;
+			void initializeQbitTab(token);
+		}
+	}
+
+	async function loadQbitConfig({ preserveDirty = false } = {}) {
 		qbitConfigLoading = true;
 		qbitMessage = '';
 		try {
@@ -215,6 +240,9 @@
 				throw new Error(await readError(res, 'Failed to load qBittorrent config'));
 			}
 			const data = await res.json();
+			if (preserveDirty && qbitConfigDirty) {
+				return;
+			}
 			qbitConfig = {
 				base_url: data?.base_url || '',
 				username: data?.username || '',
@@ -253,6 +281,7 @@
 				has_password: Boolean(data?.has_password),
 				masked_password: data?.masked_password || ''
 			};
+			qbitConfigDirty = false;
 			qbitMessage = 'qBittorrent config saved.';
 			await loadQbitTorrents();
 		} catch (err) {
@@ -330,11 +359,13 @@
 
 	onMount(async () => {
 		await loadIndexers();
-		loadQbitConfig(); // Load config so download actions know whether to use qBittorrent
+		void loadQbitConfig({ preserveDirty: true }); // Preload config for download actions without clobbering edits
 
 		// Keyboard shortcuts
 		document.addEventListener('keydown', handleKeydown);
 		return () => {
+			qbitTabInitToken += 1;
+			clearQbitMonitorInterval();
 			document.removeEventListener('keydown', handleKeydown);
 		};
 	});
@@ -704,7 +735,7 @@
 		<div class="flex min-w-max gap-1">
 			{#each tabs as tab}
 				<button
-					onclick={() => (activeTab = tab.id)}
+					onclick={() => selectTab(tab.id)}
 					role="tab"
 					aria-selected={activeTab === tab.id}
 					class="shrink-0 whitespace-nowrap px-6 py-3 text-xs uppercase tracking-widest font-semibold transition-colors {activeTab ===
@@ -1077,6 +1108,7 @@
 						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Web UI URL</span>
 						<input
 							bind:value={qbitConfig.base_url}
+							oninput={markQbitConfigDirty}
 							type="text"
 							placeholder="http://localhost:8080"
 							class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500"
@@ -1086,6 +1118,7 @@
 						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Username</span>
 						<input
 							bind:value={qbitConfig.username}
+							oninput={markQbitConfigDirty}
 							type="text"
 							placeholder="admin"
 							class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500"
@@ -1095,6 +1128,7 @@
 						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Password</span>
 						<input
 							bind:value={qbitConfig.password}
+							oninput={markQbitConfigDirty}
 							type="password"
 							placeholder={qbitConfig.has_password ? qbitConfig.masked_password || 'Saved password' : 'adminadmin'}
 							class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500"
