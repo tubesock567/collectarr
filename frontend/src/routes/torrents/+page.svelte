@@ -152,6 +152,97 @@
 	let qbitConfigDirty = $state(false);
 	let qbitTabInitToken = 0;
 
+	// qBittorrent sorting state
+	let qbitSortBy = $state('name');
+	let qbitSortOrder = $state('asc');
+	let sortedQbitTorrents = $derived.by(() => {
+		const sorted = [...qbitTorrents];
+		sorted.sort((a, b) => {
+			let valA, valB;
+			switch (qbitSortBy) {
+				case 'name':
+					valA = (a.name || '').toLowerCase();
+					valB = (b.name || '').toLowerCase();
+					break;
+				case 'state':
+					valA = (a.state || '').toLowerCase();
+					valB = (b.state || '').toLowerCase();
+					break;
+				case 'progress':
+					valA = a.progress || 0;
+					valB = b.progress || 0;
+					break;
+				case 'total_size':
+					valA = a.total_size || 0;
+					valB = b.total_size || 0;
+					break;
+				case 'downloaded':
+					valA = a.downloaded || 0;
+					valB = b.downloaded || 0;
+					break;
+				case 'uploaded':
+					valA = a.uploaded || 0;
+					valB = b.uploaded || 0;
+					break;
+				case 'ratio':
+					valA = a.ratio || 0;
+					valB = b.ratio || 0;
+					break;
+				case 'eta':
+					valA = a.eta || 0;
+					valB = b.eta || 0;
+					break;
+				case 'seeds':
+					valA = a.num_seeds || 0;
+					valB = b.num_seeds || 0;
+					break;
+				case 'peers':
+					valA = a.num_leechers || 0;
+					valB = b.num_leechers || 0;
+					break;
+				case 'download_speed':
+					valA = a.download_speed || 0;
+					valB = b.download_speed || 0;
+					break;
+				case 'upload_speed':
+					valA = a.upload_speed || 0;
+					valB = b.upload_speed || 0;
+					break;
+				case 'category':
+					valA = (a.category || '').toLowerCase();
+					valB = (b.category || '').toLowerCase();
+					break;
+				case 'tags':
+					valA = (a.tags || '').toLowerCase();
+					valB = (b.tags || '').toLowerCase();
+					break;
+				case 'save_path':
+					valA = (a.save_path || '').toLowerCase();
+					valB = (b.save_path || '').toLowerCase();
+					break;
+				case 'added_on':
+					valA = a.added_on || 0;
+					valB = b.added_on || 0;
+					break;
+				case 'completion_on':
+					valA = a.completion_on || 0;
+					valB = b.completion_on || 0;
+					break;
+				case 'seeding_time':
+					valA = a.seeding_time || 0;
+					valB = b.seeding_time || 0;
+					break;
+				default:
+					valA = (a.name || '').toLowerCase();
+					valB = (b.name || '').toLowerCase();
+			}
+			if (valA < valB) return qbitSortOrder === 'asc' ? -1 : 1;
+			if (valA > valB) return qbitSortOrder === 'asc' ? 1 : -1;
+			return 0;
+		});
+		return sorted;
+	});
+
 	const allQbitColumns = [
 		{ id: 'name', label: 'Name' },
 		{ id: 'state', label: 'State' },
@@ -186,6 +277,25 @@
 			current.push(id);
 		}
 		preferences.updateQbitColumns(current);
+	}
+
+	function handleQbitSort(field) {
+		if (qbitSortBy === field) {
+			qbitSortOrder = qbitSortOrder === 'asc' ? 'desc' : 'asc';
+		} else {
+			qbitSortBy = field;
+			qbitSortOrder = field === 'name' || field === 'state' || field === 'category' || field === 'tags' || field === 'save_path' ? 'asc' : 'desc';
+		}
+	}
+
+	function getQbitSortIcon(field) {
+		if (qbitSortBy !== field) {
+			return '<svg class="inline h-3 w-3 ml-1 text-neutral-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M7 15l5 5 5-5M7 9l5-5 5 5"/></svg>';
+		}
+		if (qbitSortOrder === 'asc') {
+			return '<svg class="inline h-3 w-3 ml-1 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 15l7-7 7 7"/></svg>';
+		}
+		return '<svg class="inline h-3 w-3 ml-1 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 9l-7 7-7-7"/></svg>';
 	}
 
 	function clearQbitMonitorInterval() {
@@ -1224,28 +1334,28 @@
 						<table class="min-w-max divide-y divide-neutral-800 text-left text-sm whitespace-nowrap">
 							<thead class="bg-neutral-950 text-[11px] uppercase tracking-[0.25em] text-neutral-400">
 								<tr>
-									{#if activeQbitColumns.includes('name')}<th class="px-4 py-3">Name</th>{/if}
-									{#if activeQbitColumns.includes('state')}<th class="px-4 py-3">State</th>{/if}
-									{#if activeQbitColumns.includes('progress')}<th class="px-4 py-3">Progress</th>{/if}
-									{#if activeQbitColumns.includes('total_size')}<th class="px-4 py-3">Size</th>{/if}
-									{#if activeQbitColumns.includes('downloaded')}<th class="px-4 py-3">Done</th>{/if}
-									{#if activeQbitColumns.includes('uploaded')}<th class="px-4 py-3">Uploaded</th>{/if}
-									{#if activeQbitColumns.includes('ratio')}<th class="px-4 py-3">Ratio</th>{/if}
-									{#if activeQbitColumns.includes('eta')}<th class="px-4 py-3">ETA</th>{/if}
-									{#if activeQbitColumns.includes('seeds')}<th class="px-4 py-3">Seeds</th>{/if}
-									{#if activeQbitColumns.includes('peers')}<th class="px-4 py-3">Peers</th>{/if}
-									{#if activeQbitColumns.includes('download_speed')}<th class="px-4 py-3">DL Speed</th>{/if}
-									{#if activeQbitColumns.includes('upload_speed')}<th class="px-4 py-3">UP Speed</th>{/if}
-									{#if activeQbitColumns.includes('category')}<th class="px-4 py-3">Category</th>{/if}
-									{#if activeQbitColumns.includes('tags')}<th class="px-4 py-3">Tags</th>{/if}
-									{#if activeQbitColumns.includes('save_path')}<th class="px-4 py-3">Save Path</th>{/if}
-									{#if activeQbitColumns.includes('added_on')}<th class="px-4 py-3">Added</th>{/if}
-									{#if activeQbitColumns.includes('completion_on')}<th class="px-4 py-3">Completed</th>{/if}
-									{#if activeQbitColumns.includes('seeding_time')}<th class="px-4 py-3">Seeding Time</th>{/if}
+									{#if activeQbitColumns.includes('name')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('name')}>Name {@html getQbitSortIcon('name')}</th>{/if}
+									{#if activeQbitColumns.includes('state')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('state')}>State {@html getQbitSortIcon('state')}</th>{/if}
+									{#if activeQbitColumns.includes('progress')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('progress')}>Progress {@html getQbitSortIcon('progress')}</th>{/if}
+									{#if activeQbitColumns.includes('total_size')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('total_size')}>Size {@html getQbitSortIcon('total_size')}</th>{/if}
+									{#if activeQbitColumns.includes('downloaded')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('downloaded')}>Done {@html getQbitSortIcon('downloaded')}</th>{/if}
+									{#if activeQbitColumns.includes('uploaded')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('uploaded')}>Uploaded {@html getQbitSortIcon('uploaded')}</th>{/if}
+									{#if activeQbitColumns.includes('ratio')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('ratio')}>Ratio {@html getQbitSortIcon('ratio')}</th>{/if}
+									{#if activeQbitColumns.includes('eta')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('eta')}>ETA {@html getQbitSortIcon('eta')}</th>{/if}
+									{#if activeQbitColumns.includes('seeds')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('seeds')}>Seeds {@html getQbitSortIcon('seeds')}</th>{/if}
+									{#if activeQbitColumns.includes('peers')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('peers')}>Peers {@html getQbitSortIcon('peers')}</th>{/if}
+									{#if activeQbitColumns.includes('download_speed')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('download_speed')}>DL Speed {@html getQbitSortIcon('download_speed')}</th>{/if}
+									{#if activeQbitColumns.includes('upload_speed')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('upload_speed')}>UP Speed {@html getQbitSortIcon('upload_speed')}</th>{/if}
+									{#if activeQbitColumns.includes('category')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('category')}>Category {@html getQbitSortIcon('category')}</th>{/if}
+									{#if activeQbitColumns.includes('tags')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('tags')}>Tags {@html getQbitSortIcon('tags')}</th>{/if}
+									{#if activeQbitColumns.includes('save_path')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('save_path')}>Save Path {@html getQbitSortIcon('save_path')}</th>{/if}
+									{#if activeQbitColumns.includes('added_on')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('added_on')}>Added {@html getQbitSortIcon('added_on')}</th>{/if}
+									{#if activeQbitColumns.includes('completion_on')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('completion_on')}>Completed {@html getQbitSortIcon('completion_on')}</th>{/if}
+									{#if activeQbitColumns.includes('seeding_time')}<th class="px-4 py-3 cursor-pointer hover:text-white select-none whitespace-nowrap" onclick={() => handleQbitSort('seeding_time')}>Seeding Time {@html getQbitSortIcon('seeding_time')}</th>{/if}
 								</tr>
 							</thead>
 							<tbody class="divide-y divide-neutral-900">
-								{#each qbitTorrents as torrent (torrent.hash)}
+								{#each sortedQbitTorrents as torrent (torrent.hash)}
 									<tr class="align-middle hover:bg-neutral-950/70">
 										{#if activeQbitColumns.includes('name')}
 											<td class="max-w-sm px-4 py-3 text-white" title={torrent.name}>
