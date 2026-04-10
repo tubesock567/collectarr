@@ -4,7 +4,17 @@ import { writable } from 'svelte/store';
 const PREFS_KEY = 'collectarr-preferences';
 
 const defaultPreferences = {
-	incognito: false
+	incognito: false,
+	qbitColumns: [
+		'name',
+		'state',
+		'progress',
+		'total_size',
+		'download_speed',
+		'upload_speed',
+		'eta',
+		'ratio'
+	]
 };
 
 function loadInitialPreferences() {
@@ -53,6 +63,15 @@ function createPreferencesStore() {
 		setIncognito(incognito) {
 			update((current) => {
 				const next = { ...current, incognito };
+				if (browser) {
+					applyPreferences(next);
+				}
+				return next;
+			});
+		},
+		updateQbitColumns(columns) {
+			update((current) => {
+				const next = { ...current, qbitColumns: columns };
 				if (browser) {
 					applyPreferences(next);
 				}

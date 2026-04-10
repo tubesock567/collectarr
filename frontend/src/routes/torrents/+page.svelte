@@ -1,11 +1,13 @@
 <script>
 	import { authFetch } from '$lib/auth';
 	import { onMount } from 'svelte';
+	import { preferences } from '$lib/preferences';
 
 	// Tab state
 	let activeTab = $state('search');
 	const tabs = [
 		{ id: 'search', label: 'Search' },
+		{ id: 'qbittorrent', label: 'qBittorrent' },
 		{ id: 'indexers', label: 'Manage Indexers' },
 		{ id: 'history', label: 'History' }
 	];
@@ -131,6 +133,195 @@
 	let uniqueTrackers = $derived([...new Set(historyItems.map((i) => i.tracker).filter(Boolean))]);
 	let deletingHistoryId = $state(null);
 
+	// qBittorrent state
+	let qbitConfig = $state({
+		base_url: '',
+		username: '',
+		password: '',
+		has_password: false,
+		masked_password: ''
+	});
+	let qbitConfigLoading = $state(true);
+	let qbitSaving = $state(false);
+	let qbitMessage = $state('');
+	let qbitTorrents = $state([]);
+	let qbitMonitorLoading = $state(false);
+	let qbitMonitorMessage = $state('');
+	let qbitLastUpdated = $state('');
+	let qbitMonitorInterval = null;
+
+	const allQbitColumns = [
+		{ id: 'name', label: 'Name' },
+		{ id: 'state', label: 'State' },
+		{ id: 'progress', label: 'Progress' },
+		{ id: 'total_size', label: 'Size' },
+		{ id: 'downloaded', label: 'Done' },
+		{ id: 'uploaded', label: 'Uploaded' },
+		{ id: 'ratio', label: 'Ratio' },
+		{ id: 'eta', label: 'ETA' },
+		{ id: 'seeds', label: 'Seeds' },
+		{ id: 'peers', label: 'Peers' },
+		{ id: 'download_speed', label: 'DL Speed' },
+		{ id: 'upload_speed', label: 'UP Speed' },
+		{ id: 'category', label: 'Category' },
+		{ id: 'tags', label: 'Tags' },
+		{ id: 'save_path', label: 'Save Path' },
+		{ id: 'added_on', label: 'Added' },
+		{ id: 'completion_on', label: 'Completed' }
+	];
+	let activeQbitColumns = $derived($preferences.qbitColumns || ['name']);
+
+	function toggleQbitColumn(id) {
+		const current = [...activeQbitColumns];
+		const idx = current.indexOf(id);
+		if (idx >= 0) {
+			if (current.length === 1) {
+				return;
+			}
+			current.splice(idx, 1);
+		} else {
+			current.push(id);
+		}
+		preferences.updateQbitColumns(current);
+	}
+
+	$effect(() => {
+		if (activeTab === 'qbittorrent') {
+			loadQbitConfig();
+			loadQbitTorrents();
+			if (!qbitMonitorInterval) {
+				qbitMonitorInterval = setInterval(loadQbitTorrents, 3000);
+			}
+			return () => {
+				if (qbitMonitorInterval) {
+					clearInterval(qbitMonitorInterval);
+					qbitMonitorInterval = null;
+				}
+			};
+		}
+
+		if (qbitMonitorInterval) {
+			clearInterval(qbitMonitorInterval);
+			qbitMonitorInterval = null;
+		}
+	});
+
+	async function loadQbitConfig() {
+		qbitConfigLoading = true;
+		qbitMessage = '';
+		try {
+			const res = await authFetch('/api/settings/qbittorrent');
+			if (!res.ok) {
+				throw new Error(await readError(res, 'Failed to load qBittorrent config'));
+			}
+			const data = await res.json();
+			qbitConfig = {
+				base_url: data?.base_url || '',
+				username: data?.username || '',
+				password: '',
+				has_password: Boolean(data?.has_password),
+				masked_password: data?.masked_password || ''
+			};
+		} catch (err) {
+			qbitMessage = `Error: ${err.message}`;
+		} finally {
+			qbitConfigLoading = false;
+		}
+	}
+
+	async function saveQbitConfig() {
+		if (qbitSaving) return;
+		qbitSaving = true;
+		qbitMessage = '';
+		try {
+			const res = await authFetch('/api/settings/qbittorrent', {
+				method: 'POST',
+				body: JSON.stringify({
+					base_url: qbitConfig.base_url,
+					username: qbitConfig.username,
+					password: qbitConfig.password
+				})
+			});
+			if (!res.ok) {
+				throw new Error(await readError(res, 'Failed to save qBittorrent config'));
+			}
+			const data = await res.json();
+			qbitConfig = {
+				base_url: data?.base_url || '',
+				username: data?.username || '',
+				password: '',
+				has_password: Boolean(data?.has_password),
+				masked_password: data?.masked_password || ''
+			};
+			qbitMessage = 'qBittorrent config saved.';
+			await loadQbitTorrents();
+		} catch (err) {
+			qbitMessage = `Error: ${err.message}`;
+		} finally {
+			qbitSaving = false;
+		}
+	}
+
+	async function loadQbitTorrents() {
+		if (!qbitConfig.base_url && !qbitConfigLoading) {
+			qbitTorrents = [];
+			qbitMonitorMessage = '';
+			return;
+		}
+		if (qbitTorrents.length === 0) qbitMonitorLoading = true;
+		try {
+			const res = await authFetch('/api/torrents/qbittorrent');
+			if (!res.ok) {
+				throw new Error(await readError(res, 'Failed to load qBittorrent torrents'));
+			}
+			const data = await res.json();
+			qbitTorrents = data?.items || [];
+			qbitMonitorMessage = '';
+			qbitLastUpdated = new Date().toLocaleTimeString();
+		} catch (err) {
+			qbitTorrents = [];
+			qbitMonitorMessage = `Error: ${err.message}`;
+		} finally {
+			qbitMonitorLoading = false;
+		}
+	}
+
+	function hasQbitConfig() {
+		return Boolean(qbitConfig.base_url && qbitConfig.username && (qbitConfig.has_password || qbitConfig.password));
+	}
+
+	function formatSpeed(bytesPerSec) {
+		if (!bytesPerSec || bytesPerSec === 0) return '0 B/s';
+		return formatBytes(bytesPerSec) + '/s';
+	}
+
+	function formatETA(etaSeconds) {
+		if (etaSeconds >= 8640000 || etaSeconds < 0) return '∞';
+		if (etaSeconds === 0) return 'Done';
+		const days = Math.floor(etaSeconds / 86400);
+		const hours = Math.floor((etaSeconds % 86400) / 3600);
+		const mins = Math.floor((etaSeconds % 3600) / 60);
+		const secs = etaSeconds % 60;
+		if (days > 0) return `${days}d ${hours}h`;
+		if (hours > 0) return `${hours}h ${mins}m`;
+		if (mins > 0) return `${mins}m ${secs}s`;
+		return `${secs}s`;
+	}
+
+	function formatProgress(progress) {
+		return `${((progress || 0) * 100).toFixed(1)}%`;
+	}
+
+	function formatRatio(value) {
+		if (typeof value !== 'number' || Number.isNaN(value)) return '0.00';
+		return value.toFixed(2);
+	}
+
+	function formatTimestamp(unixSeconds) {
+		if (!unixSeconds || unixSeconds <= 0) return '—';
+		return new Date(unixSeconds * 1000).toLocaleString();
+	}
+
 	// Auto-refresh history when tab is active
 	$effect(() => {
 		if (activeTab !== 'history') return;
@@ -139,6 +330,7 @@
 
 	onMount(async () => {
 		await loadIndexers();
+		loadQbitConfig(); // Load config so download actions know whether to use qBittorrent
 
 		// Keyboard shortcuts
 		document.addEventListener('keydown', handleKeydown);
@@ -321,13 +513,41 @@
 	}
 
 	async function recordDownload(result, event) {
-		// Prevent default download behavior to track status
 		if (event) event.preventDefault();
 
 		const downloadUrl = result.download_url || result.download_url;
 		if (!downloadUrl) return;
+		let finalStatus = 'success';
 
-		// Record as pending first
+		if (hasQbitConfig()) {
+			try {
+				const addRes = await authFetch('/api/torrents/qbittorrent/add', {
+					method: 'POST',
+					body: JSON.stringify({ url: downloadUrl })
+				});
+				if (!addRes.ok) {
+					throw new Error(await readError(addRes, 'Failed to send torrent to qBittorrent'));
+				}
+				finalStatus = 'queued';
+				if (activeTab === 'qbittorrent') {
+					await loadQbitTorrents();
+				}
+			} catch (err) {
+				console.error('Failed to send to qBittorrent:', err);
+				searchMessage = `Error: ${err.message}`;
+				finalStatus = 'failed';
+			}
+		} else {
+			const a = document.createElement('a');
+			a.href = downloadUrl;
+			a.download = '';
+			a.target = '_blank';
+			document.body.appendChild(a);
+			a.click();
+			document.body.removeChild(a);
+			finalStatus = 'opened';
+		}
+
 		try {
 			await authFetch('/api/torrents/history', {
 				method: 'POST',
@@ -340,43 +560,12 @@
 					seeders: result.seeders,
 					leechers: result.leechers,
 					freeleech: result.freeleech,
-					status: 'pending'
+					status: finalStatus
 				})
 			});
 		} catch (err) {
-			console.error('Failed to record download:', err);
+			console.error('Failed to record download status:', err);
 		}
-
-		// Trigger actual download
-		const a = document.createElement('a');
-		a.href = downloadUrl;
-		a.download = '';
-		a.target = '_blank';
-		document.body.appendChild(a);
-		a.click();
-		document.body.removeChild(a);
-
-		// Update status to success after a brief delay
-		setTimeout(async () => {
-			try {
-				await authFetch('/api/torrents/history', {
-					method: 'POST',
-					body: JSON.stringify({
-						title: result.title,
-						url: result.url,
-						download_url: downloadUrl,
-						tracker: result.tracker,
-						size: result.size,
-						seeders: result.seeders,
-						leechers: result.leechers,
-						freeleech: result.freeleech,
-						status: 'success'
-					})
-				});
-			} catch (err) {
-				console.error('Failed to update download status:', err);
-			}
-		}, 1000);
 	}
 
 	async function loadHistory() {
@@ -506,7 +695,7 @@
 	<div class="mb-8 border-b border-neutral-800 pb-4">
 		<h1 class="text-2xl font-bold uppercase tracking-widest">Torrents</h1>
 		<p class="mt-2 max-w-3xl text-sm text-neutral-500">
-			Search torrents across Jackett indexers, manage your indexers, and view download history.
+			Search torrents across Jackett indexers, send matches to qBittorrent, and monitor torrent activity.
 		</p>
 	</div>
 
@@ -865,6 +1054,225 @@
 		</section>
 	{/if}
 
+	<!-- qBittorrent Tab -->
+	{#if activeTab === 'qbittorrent'}
+		<section class="space-y-6">
+			<section class="border border-neutral-800 p-6">
+				<div class="mb-6">
+					<h2 class="text-sm font-semibold uppercase tracking-widest text-white">
+						qBittorrent Configuration
+					</h2>
+					<p class="mt-1 text-xs text-neutral-500">
+						Set up qBittorrent Web UI. Search downloads queue there when config is complete.
+					</p>
+				</div>
+				<form
+					class="grid gap-4 sm:grid-cols-1 md:grid-cols-3"
+					onsubmit={(e) => {
+						e.preventDefault();
+						saveQbitConfig();
+					}}
+				>
+					<label class="grid gap-2">
+						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Web UI URL</span>
+						<input
+							bind:value={qbitConfig.base_url}
+							type="text"
+							placeholder="http://localhost:8080"
+							class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500"
+						/>
+					</label>
+					<label class="grid gap-2">
+						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Username</span>
+						<input
+							bind:value={qbitConfig.username}
+							type="text"
+							placeholder="admin"
+							class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500"
+						/>
+					</label>
+					<label class="grid gap-2">
+						<span class="text-xs uppercase tracking-[0.25em] text-neutral-400">Password</span>
+						<input
+							bind:value={qbitConfig.password}
+							type="password"
+							placeholder={qbitConfig.has_password ? qbitConfig.masked_password || 'Saved password' : 'adminadmin'}
+							class="w-full border border-neutral-800 bg-black px-4 py-3 text-sm outline-none focus:border-neutral-500"
+						/>
+					</label>
+					<div class="col-span-full mt-2 flex items-center justify-between">
+						{#if qbitMessage}
+							<p class="text-xs tracking-wide {qbitMessage.startsWith('Error') ? 'text-red-500' : 'text-neutral-400'}">
+								{qbitMessage}
+							</p>
+						{:else}
+							<span></span>
+						{/if}
+						<button
+							type="submit"
+							disabled={qbitSaving}
+							class="bg-white px-6 py-3 text-xs font-bold uppercase tracking-widest text-black transition-colors hover:bg-neutral-300 disabled:bg-neutral-800 disabled:text-neutral-500"
+						>
+							{#if qbitSaving}
+								Saving...
+							{:else}
+								Save Configuration
+							{/if}
+						</button>
+					</div>
+				</form>
+			</section>
+
+			<section class="border border-neutral-800 p-6">
+				<div class="flex flex-col gap-4 mb-4 lg:flex-row lg:items-center lg:justify-between">
+					<div>
+						<h2 class="text-sm font-semibold uppercase tracking-widest text-white">Torrents Monitor</h2>
+						<p class="mt-1 text-xs text-neutral-500">
+							Live qBittorrent details. Toggle cols below. Table scrolls horizontally inside panel.
+						</p>
+						{#if qbitLastUpdated}
+							<p class="mt-2 text-[10px] uppercase tracking-[0.25em] text-neutral-600">
+								Updated {qbitLastUpdated}
+							</p>
+						{/if}
+					</div>
+					<div class="flex flex-wrap gap-4 items-center justify-end">
+						<button
+							onclick={loadQbitTorrents}
+							class="border border-neutral-700 px-3 py-2 text-[11px] uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
+						>
+							Refresh
+						</button>
+						<span class="text-[10px] uppercase tracking-[0.25em] text-neutral-500">Columns:</span>
+						{#each allQbitColumns as col}
+							<label class="flex items-center gap-1 cursor-pointer">
+								<input
+									type="checkbox"
+									checked={activeQbitColumns.includes(col.id)}
+									onchange={() => toggleQbitColumn(col.id)}
+									class="accent-neutral-500"
+								/>
+								<span class="text-[10px] uppercase tracking-widest text-neutral-400">{col.label}</span>
+							</label>
+						{/each}
+					</div>
+				</div>
+				
+				{#if qbitMonitorMessage}
+					<p class="mb-4 text-xs tracking-wide text-red-500">{qbitMonitorMessage}</p>
+				{/if}
+
+				{#if !hasQbitConfig()}
+					<div class="flex min-h-32 flex-col items-center justify-center border border-neutral-800 bg-black px-4 py-5 text-center">
+						<p class="text-sm text-neutral-500">Add URL, username, password above to monitor qBittorrent torrents.</p>
+					</div>
+				{:else if qbitMonitorLoading}
+					<div class="flex min-h-32 items-center justify-center border border-neutral-800 bg-black">
+						<span class="loading loading-spinner loading-md text-white"></span>
+					</div>
+				{:else if qbitTorrents.length === 0}
+					<div class="flex min-h-32 flex-col items-center justify-center border border-neutral-800 bg-black px-4 py-5 text-center">
+						<p class="text-sm text-neutral-500">No active torrents in qBittorrent.</p>
+					</div>
+				{:else}
+					<div class="overflow-x-auto border border-neutral-800 bg-black">
+						<table class="min-w-max divide-y divide-neutral-800 text-left text-sm whitespace-nowrap">
+							<thead class="bg-neutral-950 text-[11px] uppercase tracking-[0.25em] text-neutral-400">
+								<tr>
+									{#if activeQbitColumns.includes('name')}<th class="px-4 py-3">Name</th>{/if}
+									{#if activeQbitColumns.includes('state')}<th class="px-4 py-3">State</th>{/if}
+									{#if activeQbitColumns.includes('progress')}<th class="px-4 py-3">Progress</th>{/if}
+									{#if activeQbitColumns.includes('total_size')}<th class="px-4 py-3">Size</th>{/if}
+									{#if activeQbitColumns.includes('downloaded')}<th class="px-4 py-3">Done</th>{/if}
+									{#if activeQbitColumns.includes('uploaded')}<th class="px-4 py-3">Uploaded</th>{/if}
+									{#if activeQbitColumns.includes('ratio')}<th class="px-4 py-3">Ratio</th>{/if}
+									{#if activeQbitColumns.includes('eta')}<th class="px-4 py-3">ETA</th>{/if}
+									{#if activeQbitColumns.includes('seeds')}<th class="px-4 py-3">Seeds</th>{/if}
+									{#if activeQbitColumns.includes('peers')}<th class="px-4 py-3">Peers</th>{/if}
+									{#if activeQbitColumns.includes('download_speed')}<th class="px-4 py-3">DL Speed</th>{/if}
+									{#if activeQbitColumns.includes('upload_speed')}<th class="px-4 py-3">UP Speed</th>{/if}
+									{#if activeQbitColumns.includes('category')}<th class="px-4 py-3">Category</th>{/if}
+									{#if activeQbitColumns.includes('tags')}<th class="px-4 py-3">Tags</th>{/if}
+									{#if activeQbitColumns.includes('save_path')}<th class="px-4 py-3">Save Path</th>{/if}
+									{#if activeQbitColumns.includes('added_on')}<th class="px-4 py-3">Added</th>{/if}
+									{#if activeQbitColumns.includes('completion_on')}<th class="px-4 py-3">Completed</th>{/if}
+								</tr>
+							</thead>
+							<tbody class="divide-y divide-neutral-900">
+								{#each qbitTorrents as torrent (torrent.hash)}
+									<tr class="align-middle hover:bg-neutral-950/70">
+										{#if activeQbitColumns.includes('name')}
+											<td class="max-w-sm px-4 py-3 text-white" title={torrent.name}>
+												<p class="max-w-sm truncate font-medium">{torrent.name}</p>
+											</td>
+										{/if}
+										{#if activeQbitColumns.includes('state')}
+											<td class="px-4 py-3 text-neutral-300 capitalize">{torrent.state || 'Unknown'}</td>
+										{/if}
+										{#if activeQbitColumns.includes('progress')}
+											<td class="px-4 py-3 text-neutral-300">
+												<div class="flex items-center gap-2">
+													<div class="h-1.5 w-24 overflow-hidden bg-neutral-800">
+														<div class="h-full bg-blue-500" style={`width: ${Math.max(0, Math.min(100, (torrent.progress || 0) * 100))}%`}></div>
+													</div>
+													<span class="text-[10px] uppercase tracking-[0.25em]">{formatProgress(torrent.progress)}</span>
+												</div>
+											</td>
+										{/if}
+										{#if activeQbitColumns.includes('total_size')}
+											<td class="px-4 py-3 text-neutral-300">{formatBytes(torrent.total_size)}</td>
+										{/if}
+										{#if activeQbitColumns.includes('downloaded')}
+											<td class="px-4 py-3 text-neutral-300">{formatBytes(torrent.downloaded)}</td>
+										{/if}
+										{#if activeQbitColumns.includes('uploaded')}
+											<td class="px-4 py-3 text-neutral-300">{formatBytes(torrent.uploaded)}</td>
+										{/if}
+										{#if activeQbitColumns.includes('ratio')}
+											<td class="px-4 py-3 text-neutral-300">{formatRatio(torrent.ratio)}</td>
+										{/if}
+										{#if activeQbitColumns.includes('eta')}
+											<td class="px-4 py-3 text-neutral-300">{formatETA(torrent.eta)}</td>
+										{/if}
+										{#if activeQbitColumns.includes('seeds')}
+											<td class="px-4 py-3 text-emerald-500">{torrent.num_seeds}</td>
+										{/if}
+										{#if activeQbitColumns.includes('peers')}
+											<td class="px-4 py-3 text-blue-500">{torrent.num_leechers}</td>
+										{/if}
+										{#if activeQbitColumns.includes('download_speed')}
+											<td class="px-4 py-3 text-neutral-300">{formatSpeed(torrent.download_speed)}</td>
+										{/if}
+										{#if activeQbitColumns.includes('upload_speed')}
+											<td class="px-4 py-3 text-neutral-300">{formatSpeed(torrent.upload_speed)}</td>
+										{/if}
+										{#if activeQbitColumns.includes('category')}
+											<td class="px-4 py-3 text-neutral-300">{torrent.category || '—'}</td>
+										{/if}
+										{#if activeQbitColumns.includes('tags')}
+											<td class="px-4 py-3 text-neutral-300">{torrent.tags || '—'}</td>
+										{/if}
+										{#if activeQbitColumns.includes('save_path')}
+											<td class="max-w-sm px-4 py-3 text-neutral-300" title={torrent.save_path}>
+												<p class="max-w-sm truncate">{torrent.save_path || '—'}</p>
+											</td>
+										{/if}
+										{#if activeQbitColumns.includes('added_on')}
+											<td class="px-4 py-3 text-neutral-300">{formatTimestamp(torrent.added_on)}</td>
+										{/if}
+										{#if activeQbitColumns.includes('completion_on')}
+											<td class="px-4 py-3 text-neutral-300">{formatTimestamp(torrent.completion_on)}</td>
+										{/if}
+									</tr>
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				{/if}
+			</section>
+		</section>
+	{/if}
+
 	<!-- Manage Indexers Tab -->
 	{#if activeTab === 'indexers'}
 		<section class="border border-neutral-800 p-6">
@@ -1024,6 +1432,7 @@
 								<th class="px-4 py-3">Title</th>
 								<th class="px-4 py-3">Tracker</th>
 								<th class="px-4 py-3">Size</th>
+								<th class="px-4 py-3">Status</th>
 								<th class="px-4 py-3">Downloaded</th>
 								<th class="px-4 py-3"></th>
 							</tr>
@@ -1054,6 +1463,16 @@
 									</td>
 									<td class="px-4 py-4 text-neutral-300">{item.tracker || 'Unknown'}</td>
 									<td class="px-4 py-4 text-neutral-300">{formatBytes(item.size)}</td>
+									<td class="px-4 py-4 text-neutral-300">
+										<span
+											class:text-emerald-400={item.status === 'queued' || item.status === 'success'}
+											class:text-amber-400={item.status === 'opened'}
+											class:text-red-400={item.status === 'failed'}
+											class="text-xs uppercase tracking-[0.25em]"
+										>
+											{item.status || 'Unknown'}
+										</span>
+									</td>
 									<td class="px-4 py-4 text-neutral-300">{formatDate(item.downloaded_at)}</td>
 									<td class="px-4 py-4">
 										<div class="flex items-center gap-2">
@@ -1144,11 +1563,21 @@
 {#if showAddIndexerPopup}
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm"
+		role="button"
+		tabindex="0"
 		onclick={() => (showAddIndexerPopup = false)}
+		onkeydown={(e) => {
+			if (e.key === 'Escape' || e.key === 'Enter' || e.key === ' ') {
+				e.preventDefault();
+				showAddIndexerPopup = false;
+			}
+		}}
 	>
 		<div
 			class="w-full max-w-md border border-neutral-800 bg-black p-6"
+			role="presentation"
 			onclick={(e) => e.stopPropagation()}
+			onkeydown={(e) => e.stopPropagation()}
 		>
 			<div class="mb-6 flex items-center justify-between">
 				<h3 class="text-sm font-semibold uppercase tracking-widest text-white">
