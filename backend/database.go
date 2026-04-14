@@ -2302,7 +2302,8 @@ func (s *Store) ListContinueWatching(limit int) ([]WatchProgressResponse, error)
 		FROM watch_progress wp
 		JOIN videos v ON v.id = wp.video_id
 		WHERE wp.duration > 0
-			AND (CAST(wp.position AS FLOAT) / CAST(wp.duration AS FLOAT)) BETWEEN 0.05 AND 0.95
+			AND (CAST(wp.position AS FLOAT) / CAST(wp.duration AS FLOAT)) >= 0.05
+			AND (CAST(wp.position AS FLOAT) / CAST(wp.duration AS FLOAT)) < 0.95
 		ORDER BY wp.watched_at DESC
 		LIMIT ?`, limit)
 	if err != nil {
@@ -2322,6 +2323,7 @@ func (s *Store) ListContinueWatching(limit int) ([]WatchProgressResponse, error)
 		if item.Duration > 0 {
 			item.ProgressPct = float64(item.Position) / float64(item.Duration) * 100
 		}
+		item.ThumbnailURL = fmt.Sprintf("/api/video/%d/thumbnail", item.VideoID)
 		items = append(items, item)
 	}
 
