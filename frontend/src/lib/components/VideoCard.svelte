@@ -11,6 +11,16 @@
 		return `${mins}:${secs.toString().padStart(2, '0')}`;
 	}
 
+	function scrambleText(text) {
+		if (!text) return '';
+		const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+		let scrambled = '';
+		for (let i = 0; i < text.length; i++) {
+			scrambled += chars[Math.floor(Math.random() * chars.length)];
+		}
+		return scrambled;
+	}
+
 	function formatDate(dateStr) {
 		if (!dateStr) return 'Unknown date';
 		const date = new Date(dateStr);
@@ -58,6 +68,7 @@
 	const href = $derived(
 		playlistId ? `/player/${video.id}?playlist=${playlistId}` : `/player/${video.id}`
 	);
+	const displayTitle = $derived($preferences.incognito ? scrambleText(video.title) : video.title);
 
 	function startHover() {
 		if ($preferences.incognito) return;
@@ -120,7 +131,7 @@
 		>
 			<img
 				src={`/api/video/${video.id}/thumbnail`}
-				alt={video.title}
+				alt={displayTitle}
 				class="w-full h-full object-cover transition-transform duration-700 ease-out {hovered &&
 				!previewLoaded
 					? 'group-hover:scale-105'
@@ -180,8 +191,8 @@
 					class="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center border transition-all {selected
 						? 'border-white bg-black text-white hover:bg-black'
 						: 'border-white/40 bg-black/80 text-white hover:border-white hover:bg-black'}"
-					onclick={handleSelectionButtonClick}
-					aria-label={selected ? `Deselect ${video.title}` : `Select ${video.title}`}
+				onclick={handleSelectionButtonClick}
+				aria-label={selected ? `Deselect ${displayTitle}` : `Select ${displayTitle}`}
 				>
 					{#if selected}
 						<svg
@@ -214,11 +225,11 @@
 		</div>
 
 		<div class="flex flex-col space-y-1 px-1">
-			<h3
-				class="text-white text-sm font-medium leading-snug group-hover:text-gray-300 line-clamp-2 transition-colors"
-			>
-				{video.title}
-			</h3>
+		<h3
+			class="text-white text-sm font-medium leading-snug group-hover:text-gray-300 line-clamp-2 transition-colors"
+		>
+			{displayTitle}
+		</h3>
 			<p class="text-neutral-600 text-xs tracking-wider uppercase">
 				{formatDate(video.date_added)}
 			</p>

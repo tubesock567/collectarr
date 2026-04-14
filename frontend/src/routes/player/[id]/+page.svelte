@@ -4,6 +4,17 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { onMount, onDestroy } from 'svelte';
+	import { preferences } from '$lib/preferences';
+
+	function scrambleText(text) {
+		if (!text) return '';
+		const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789!@#$%^&*';
+		let scrambled = '';
+		for (let i = 0; i < text.length; i++) {
+			scrambled += chars[Math.floor(Math.random() * chars.length)];
+		}
+		return scrambled;
+	}
 
 	let containerEl = $state(null);
 	let videoEl = $state(null);
@@ -40,6 +51,8 @@
 	let playlist = $state(null);
 	let nextVideoId = $state(null);
 	let prevVideoId = $state(null);
+
+	const displayTitle = $derived($preferences.incognito ? scrambleText(video?.title) : video?.title);
 
 	function resetTimer() {
 		showControls = true;
@@ -620,7 +633,7 @@
 	>
 		<span class="shrink-0">&larr;</span>
 		<span class="text-white/70 min-w-0 truncate text-[10px] sm:max-w-xs sm:text-xs">
-			{video?.title || 'Unknown title'}
+			{displayTitle || 'Unknown title'}
 		</span>
 	</a>
 
@@ -686,7 +699,7 @@
 				<div>
 					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-400">Video Details</p>
 					<h2 class="mt-2 text-lg font-semibold text-neutral-900 dark:text-white">
-						{video?.title || 'Unknown title'}
+						{displayTitle || 'Unknown title'}
 					</h2>
 				</div>
 				<button
