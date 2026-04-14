@@ -43,6 +43,7 @@
 
 	let continueWatching = $state([]);
 	let loadingContinueWatching = $state(true);
+	let failedContinueWatchingThumbnails = $state({});
 
 	const normalizedSearchQuery = $derived(searchQuery.trim().toLowerCase());
 	const filteredVideos = $derived.by(() => {
@@ -875,8 +876,13 @@
 				{#each continueWatching as item (item.video_id)}
 					<a href="/player/{item.video_id}" class="group block">
 						<div class="relative aspect-video bg-neutral-900 border border-neutral-800 overflow-hidden">
-							{#if item.thumbnail_url}
-								<img src={item.thumbnail_url} alt={item.title} class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" />
+							{#if item.thumbnail_url && !failedContinueWatchingThumbnails[item.video_id]}
+								<img src={item.thumbnail_url} alt={item.title} class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" onerror={() => {
+									failedContinueWatchingThumbnails = {
+										...failedContinueWatchingThumbnails,
+										[item.video_id]: true
+									};
+								}} />
 							{:else}
 								<div class="w-full h-full flex items-center justify-center">
 									<svg class="w-8 h-8 text-neutral-600" viewBox="0 0 24 24" fill="currentColor">

@@ -32,6 +32,8 @@
 
 	let showControls = $state(true);
 	let hideTimer = null;
+	let resumePosition = $state(null);
+	let lastSavedProgressPosition = $state(0);
 
 	let id = $derived($page.params.id);
 	const playlistId = $derived($page.url.searchParams.get('playlist'));
@@ -243,7 +245,25 @@
 	}
 
 	function updateSelectedVariant(id) {
+		resumePosition = Math.floor(currentTime || 0);
 		selectedVariantId = Number(id);
+	}
+
+	function normalizeProgressPayload(value) {
+		if (!value || typeof value !== 'object') {
+			return null;
+		}
+
+		const position = Number(value.position);
+		const savedDuration = Number(value.duration);
+		if (!Number.isFinite(position) || !Number.isFinite(savedDuration) || savedDuration <= 0) {
+			return null;
+		}
+
+		return {
+			position: Math.max(0, Math.floor(position)),
+			duration: Math.floor(savedDuration)
+		};
 	}
 
 	function syncMetadataDrafts(videoData) {
@@ -277,6 +297,104 @@
 			throw new Error(await readError(res, 'Failed to load metadata options'));
 		}
 		metadataOptions = await res.json();
+	}
+
+	async function loadWatchProgress(videoId) {
+		const res = await authFetch(`/api/videos/${videoId}/progress`);
+		if (!res.ok) {
+			throw new Error(await readError(res, 'Failed to load watch progress'));
+		}
+
+		const progressData = normalizeProgressPayload(await res.json());
+		if (!progressData) {
+			resumePosition = null;
+			lastSavedProgressPosition = 0;
+			return;
+		}
+
+		const completionRatio = progressData.position / progressData.duration;
+		if (completionRatio >= 0.95) {
+			resumePosition = null;
+			lastSavedProgressPosition = 0;
+			return;
+		}
+
+		resumePosition = progressData.position;
+		lastSavedProgressPosition = progressData.position;
+	}
+
+	async function saveWatchProgress({ force = false, keepalive = false } = {}) {
+		const videoId = Number(id);
+		if (!Number.isFinite(videoId)) {
+			return;
+		}
+
+		const nextDuration = Math.floor(Number(duration) || Number(videoEl?.duration) || 0);
+		if (nextDuration <= 0) {
+			return;
+		}
+
+		const nextPosition = Math.max(
+			0,
+			Math.min(Math.floor(Number(currentTime) || Number(videoEl?.currentTime) || 0), nextDuration)
+		);
+
+		if (
+			!force &&
+			(nextPosition <= 0 || Math.abs(nextPosition - lastSavedProgressPosition) < 10)
+		) {
+			return;
+		}
+
+		try {
+			const res = await authFetch(`/api/videos/${videoId}/progress`, {
+				method: 'POST',
+				body: JSON.stringify({
+					position: nextPosition,
+					duration: nextDuration
+				}),
+				keepalive
+			});
+
+			if (!res.ok) {
+				throw new Error(await readError(res, 'Failed to save watch progress'));
+			}
+
+			lastSavedProgressPosition = nextPosition;
+		} catch (err) {
+			console.error('Failed to save watch progress:', err);
+		}
+	}
+
+	function handleLoadedMetadata() {
+		if (!videoEl || resumePosition === null) {
+			return;
+		}
+
+		const safeDuration = Math.floor(Number(duration) || Number(videoEl.duration) || 0);
+		if (safeDuration <= 0) {
+			return;
+		}
+
+		const safePosition = Math.max(0, Math.min(resumePosition, Math.max(safeDuration - 1, 0)));
+		if (safePosition > 0) {
+			videoEl.currentTime = safePosition;
+			currentTime = safePosition;
+		}
+
+		resumePosition = null;
+	}
+
+	function handleTimeUpdate() {
+		saveWatchProgress();
+	}
+
+	function handlePause() {
+		saveWatchProgress({ force: true });
+	}
+
+	function handleEnded() {
+		saveWatchProgress({ force: true, keepalive: true });
 	}
 
 	async function saveMetadata() {
@@ -354,6 +472,8 @@
 		previewData = null;
 		previewError = null;
 		currentTime = 0;
+		resumePosition = null;
+		lastSavedProgressPosition = 0;
 		paused = true;
 		resetTimer();
 		try {
@@ -361,6 +481,14 @@
 			if (!videoRes.ok) throw new Error('Failed to load video');
 			video = await videoRes.json();
 			syncMetadataDrafts(video);
+
+			try {
+				await loadWatchProgress(currentId);
+			} catch {
+				resumePosition = null;
+				lastSavedProgressPosition = 0;
+			}
+
 			selectedVariantId = video?.variants?.[0]?.id ?? Number(currentId);
 
 			if (currentPlaylistId) {
@@ -409,9 +537,14 @@
 
 	onDestroy(() => {
 		if (hideTimer) clearTimeout(hideTimer);
+		saveWatchProgress({ force: true, keepalive: true });
 	});
 
 	onMount(() => {
+		const handlePageHide = () => {
+			saveWatchProgress({ force: true, keepalive: true });
+		};
+
 		const desktopInfoMediaQuery = window.matchMedia('(min-width: 768px)');
 		const handleDesktopInfoChange = (event) => {
 			if (!event.matches) {
@@ -421,9 +554,11 @@
 
 		handleDesktopInfoChange(desktopInfoMediaQuery);
 		desktopInfoMediaQuery.addEventListener('change', handleDesktopInfoChange);
+		window.addEventListener('pagehide', handlePageHide);
 
 		return () => {
 			desktopInfoMediaQuery.removeEventListener('change', handleDesktopInfoChange);
+			window.removeEventListener('pagehide', handlePageHide);
 		};
 	});
 
@@ -531,6 +666,10 @@
 		src={videoSrc}
 		class="w-full h-full object-contain cursor-pointer"
 		onclick={handleVideoSurfaceClick}
+		onloadedmetadata={handleLoadedMetadata}
+		onpause={handlePause}
+		onended={handleEnded}
+		ontimeupdate={handleTimeUpdate}
 	>
 		<track kind="captions" />
 	</video>
