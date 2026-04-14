@@ -863,7 +863,7 @@
 					</p>
 				</div>
 
-				<div class="w-full border border-neutral-800 bg-neutral-900/30 p-4 rounded">
+				<div class="w-full border border-neutral-800 bg-neutral-900/30 p-4">
 					<label class="flex items-center justify-between gap-4">
 						<div>
 							<p class="text-sm text-white uppercase tracking-widest">Auto-generate during scans</p>

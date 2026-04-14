@@ -599,7 +599,7 @@
 	<div class="mb-10 flex flex-col gap-6">
 		<div class="w-full relative">
 			<label
-				class="flex h-14 w-full items-center overflow-hidden rounded-xl border border-neutral-800 bg-neutral-950/80 text-white transition-all focus-within:border-neutral-500 focus-within:bg-neutral-900 focus-within:ring-4 focus-within:ring-neutral-800/50 shadow-sm"
+				class="flex h-14 w-full items-center overflow-hidden  border border-neutral-800 bg-neutral-950/80 text-white transition-all focus-within:border-neutral-500 focus-within:bg-neutral-900 focus-within:ring-4 focus-within:ring-neutral-800/50 shadow-sm"
 			>
 				<div class="pl-5 pr-4 text-neutral-500 flex items-center justify-center shrink-0">
 					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -621,7 +621,7 @@
 		<div class="flex flex-wrap items-center justify-between gap-4">
 			<div class="flex items-center gap-3">
 				<button
-					class="h-10 w-10 rounded-lg flex items-center justify-center border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-400 hover:text-white bg-neutral-900/50"
+					class="h-10 w-10  flex items-center justify-center border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-400 hover:text-white bg-neutral-900/50"
 					aria-label="Refresh library"
 					onclick={() => loadVideos()}
 					disabled={loading}
@@ -640,13 +640,13 @@
 				
 				<div class="relative" bind:this={desktopSortDropdownEl}>
 					<button
-						class="flex items-center justify-center gap-2 h-10 px-4 rounded-lg text-sm font-medium tracking-wide border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-300 hover:text-white bg-neutral-900/50"
+						class="flex items-center justify-center gap-2 h-10 px-4  text-sm font-medium tracking-wide border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-300 hover:text-white bg-neutral-900/50"
 						onclick={() => (showSortDropdown = !showSortDropdown)}
 						aria-label="Sort options"
 					>
 						<span>Sort: {getSortLabel()}</span>
 						<span
-							class="p-0.5 rounded hover:bg-neutral-700 transition-colors"
+							class="p-0.5 hover:bg-neutral-700 transition-colors"
 							onclick={(event) => {
 								event.stopPropagation();
 								toggleSortOrder();
@@ -673,7 +673,7 @@
 					</button>
 					{#if showSortDropdown}
 						<div
-							class="absolute top-full left-0 mt-2 w-48 rounded-xl bg-neutral-900 border border-neutral-700 shadow-2xl z-30 overflow-hidden"
+							class="absolute top-full left-0 mt-2 w-48  bg-neutral-900 border border-neutral-700 shadow-2xl z-30 overflow-hidden"
 						>
 							<button
 								class="w-full px-4 py-3 text-sm text-left hover:bg-neutral-800 transition-colors {sortBy ===
@@ -704,7 +704,7 @@
 			<div class="flex items-center gap-3">
 				<div class="hidden sm:block relative" bind:this={columnDropdownEl}>
 					<button
-						class="flex items-center gap-2 h-10 px-4 rounded-lg text-sm font-medium tracking-wide border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-300 hover:text-white bg-neutral-900/50"
+						class="flex items-center gap-2 h-10 px-4  text-sm font-medium tracking-wide border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-300 hover:text-white bg-neutral-900/50"
 						onclick={() => (showColumnDropdown = !showColumnDropdown)}
 						aria-label="Column count options"
 					>
@@ -715,7 +715,7 @@
 					</button>
 					{#if showColumnDropdown}
 						<div
-							class="absolute top-full right-0 mt-2 w-40 rounded-xl bg-neutral-900 border border-neutral-700 shadow-2xl z-30 overflow-hidden"
+							class="absolute top-full right-0 mt-2 w-40  bg-neutral-900 border border-neutral-700 shadow-2xl z-30 overflow-hidden"
 						>
 							{#each [2, 3, 4] as count}
 								<button
@@ -731,7 +731,7 @@
 				</div>
 
 				<button
-					class="h-10 px-5 rounded-lg text-sm font-medium tracking-wide border transition-colors {selectionMode
+					class="h-10 px-5  text-sm font-medium tracking-wide border transition-colors {selectionMode
 						? 'border-white bg-white text-black hover:bg-neutral-200'
 						: 'border-neutral-800 bg-neutral-900/50 text-neutral-300 hover:text-white hover:border-neutral-600'}"
 					onclick={toggleSelectionMode}
@@ -813,7 +813,7 @@
 								<div class="h-full bg-white" style="width: {item.progress_pct}%"></div>
 							</div>
 							<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-								<div class="w-12 h-12 rounded-full bg-white/90 flex items-center justify-center">
+								<div class="w-12 h-12  bg-white/90 flex items-center justify-center">
 									<svg class="w-6 h-6 text-black ml-1" viewBox="0 0 24 24" fill="currentColor">
 										<path d="M8 5v14l11-7z"/>
 									</svg>

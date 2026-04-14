@@ -800,7 +800,7 @@
 	{#if paused}
 		<div class="absolute inset-0 flex items-center justify-center pointer-events-none">
 			<button
-				class="w-24 h-24 rounded-full bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center text-white transition-all pointer-events-auto"
+				class="w-24 h-24  bg-white/10 hover:bg-white/20 backdrop-blur-md flex items-center justify-center text-white transition-all pointer-events-auto"
 				aria-label="Play video"
 				onclick={togglePlay}
 			>
@@ -851,7 +851,7 @@
 				style="width: {progress}%"
 			></div>
 			<div
-				class="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity"
+				class="absolute top-1/2 -translate-y-1/2 w-4 h-4 bg-white  opacity-0 group-hover:opacity-100 transition-opacity"
 				style="left: calc({progress}% - 8px)"
 			></div>
 		</div>

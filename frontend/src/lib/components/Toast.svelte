@@ -33,7 +33,7 @@
 		<div
 			class="flex items-center gap-3 border px-4 py-3 shadow-lg {getColors(toast.type)}"
 		>
-			<span class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border text-xs font-bold">
+			<span class="flex h-5 w-5 shrink-0 items-center justify-center  border text-xs font-bold">
 				{getIcon(toast.type)}
 			</span>
 			<span class="text-sm">{toast.message}</span>
