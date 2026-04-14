@@ -778,7 +778,12 @@
 	function goToPage(page) {
 		if (page >= 1 && page <= totalPages) {
 			currentPage = page;
-			window.scrollTo({ top: 0, behavior: 'smooth' });
+			const scrollContainer = document.querySelector('[data-shell-scroll="true"]');
+			if (scrollContainer instanceof HTMLElement) {
+				scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+			} else {
+				window.scrollTo({ top: 0, behavior: 'smooth' });
+			}
 		}
 	}
 
@@ -899,7 +904,12 @@
 		if (page >= 1 && page <= historyTotalPages) {
 			historyPage = page;
 			loadHistory();
-			window.scrollTo({ top: 0, behavior: 'smooth' });
+			const scrollContainer = document.querySelector('[data-shell-scroll="true"]');
+			if (scrollContainer instanceof HTMLElement) {
+				scrollContainer.scrollTo({ top: 0, behavior: 'smooth' });
+			} else {
+				window.scrollTo({ top: 0, behavior: 'smooth' });
+			}
 		}
 	}
 
