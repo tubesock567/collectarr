@@ -60,16 +60,41 @@
 	color: #111827 !important;
 }
 
-:root.theme-light [class~='bg-black/80'],
-:root.theme-light [class~='bg-black/90'],
-:root.theme-light [class~='bg-black/50'],
-:root.theme-light [class~='bg-black/70'] {
+:root.theme-light [class~='bg-black/80']:not(.fixed),
+:root.theme-light [class~='bg-black/90']:not(.fixed),
+:root.theme-light [class~='bg-black/50']:not(.fixed),
+:root.theme-light [class~='bg-black/70']:not(.fixed) {
 	background-color: rgba(255, 255, 255, 0.88) !important;
 	color: #111827 !important;
 }
 
 :root.theme-light [class~='bg-neutral-950/60'] {
 	background-color: rgba(229, 231, 235, 0.6) !important;
+}
+
+:root.theme-light [class~='bg-neutral-950/80'] {
+	background-color: rgba(229, 231, 235, 0.82) !important;
+}
+
+:root.theme-light [class~='bg-neutral-950/30'] {
+	background-color: rgba(229, 231, 235, 0.4) !important;
+}
+
+:root.theme-light [class~='bg-neutral-900/50'] {
+	background-color: rgba(209, 213, 219, 0.58) !important;
+}
+
+:root.theme-light [class~='bg-neutral-800/50'] {
+	background-color: rgba(203, 213, 225, 0.58) !important;
+}
+
+:root.theme-light [class*='bg-\[\#0a0a0a\]'] {
+	background-color: #f8fafc !important;
+}
+
+:root.theme-light .shadow-2xl,
+:root.theme-light .shadow-sm {
+	box-shadow: 0 10px 30px rgba(148, 163, 184, 0.18) !important;
 }
 
 :root.theme-light [class~='text-white/80'] {
