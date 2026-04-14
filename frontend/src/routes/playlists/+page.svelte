@@ -11,6 +11,89 @@
 	let newName = $state('');
 	let newDescription = $state('');
 	let creating = $state(false);
+	let createPlaylistDialogEl = $state(null);
+	let createPlaylistTriggerEl = $state(null);
+
+	function scrambleText(text) {
+		if (!text) return '';
+		const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		let scrambled = '';
+		for (let i = 0; i < text.length; i++) {
+			scrambled += chars[Math.floor(Math.random() * chars.length)];
+		}
+		return scrambled;
+	}
+
+	function displayPlaylistName(playlist) {
+		return $preferences.incognito ? scrambleText(playlist?.name) : playlist?.name;
+	}
+
+	function displayPlaylistDescription(playlist) {
+		if ($preferences.incognito) return 'Description hidden';
+		return playlist?.description || 'No description';
+	}
+
+	function getFocusableElements(container) {
+		if (!container) return [];
+		return Array.from(
+			container.querySelectorAll(
+				'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+			)
+		);
+	}
+
+	function focusDialog(container) {
+		const [firstFocusable] = getFocusableElements(container);
+		if (firstFocusable instanceof HTMLElement) {
+			firstFocusable.focus();
+			return;
+		}
+		container?.focus();
+	}
+
+	function trapDialogFocus(event, container) {
+		if (event.key !== 'Tab' || !container) return;
+
+		const focusableElements = getFocusableElements(container);
+		if (focusableElements.length === 0) {
+			event.preventDefault();
+			container.focus();
+			return;
+		}
+
+		const firstElement = focusableElements[0];
+		const lastElement = focusableElements[focusableElements.length - 1];
+
+		if (event.shiftKey && document.activeElement === firstElement) {
+			event.preventDefault();
+			lastElement.focus();
+		} else if (!event.shiftKey && document.activeElement === lastElement) {
+			event.preventDefault();
+			firstElement.focus();
+		}
+	}
+
+	function openCreateModal(event) {
+		createPlaylistTriggerEl = event.currentTarget;
+		showCreateModal = true;
+	}
+
+	function closeCreateModal({ restoreFocus = true } = {}) {
+		showCreateModal = false;
+		if (restoreFocus && createPlaylistTriggerEl instanceof HTMLElement) {
+			queueMicrotask(() => createPlaylistTriggerEl?.focus());
+		}
+	}
+
+	function handleCreateDialogKeydown(event) {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			closeCreateModal();
+			return;
+		}
+
+		trapDialogFocus(event, createPlaylistDialogEl);
+	}
 
 	function playlistCoverSrc(playlist) {
 		const version = playlist?.date_updated || playlist?.date_created || '0';
@@ -51,7 +134,7 @@
 			});
 			if (!res.ok) throw new Error(await readError(res, 'Failed to create playlist'));
 			await loadPlaylists();
-			showCreateModal = false;
+			closeCreateModal({ restoreFocus: false });
 			newName = '';
 			newDescription = '';
 		} catch (err) {
@@ -75,21 +158,60 @@
 	onMount(() => {
 		loadPlaylists();
 	});
+
+	$effect(() => {
+		if (!showCreateModal) {
+			document.body.style.overflow = '';
+			return;
+		}
+
+		document.body.style.overflow = 'hidden';
+		queueMicrotask(() => focusDialog(createPlaylistDialogEl));
+
+		return () => {
+			document.body.style.overflow = '';
+		};
+	});
 </script>
 
 <svelte:head>
 	<title>Collectarr - Playlists</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-	<div class="flex items-center justify-between mb-6">
-		<h1 class="text-xl font-bold tracking-widest uppercase text-white">Playlists</h1>
-		<button
-			class="h-9 px-4 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors"
-			onclick={() => (showCreateModal = true)}
+<div class="mx-auto flex h-full w-full max-w-[1600px] flex-col px-4 py-6 sm:px-6">
+	<div class="mb-6 border border-neutral-800 bg-[#0a0a0a]">
+		<div
+			class="flex flex-col gap-4 border-b border-neutral-800 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
 		>
-			Create Playlist
-		</button>
+			<div>
+				<p class="text-[10px] font-bold uppercase tracking-[0.32em] text-neutral-500">Archive</p>
+				<h1 class="mt-2 text-sm font-bold uppercase tracking-[0.22em] text-white sm:text-base">
+					Playlists
+				</h1>
+				<p class="mt-2 text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-600">
+					{#if loading}
+						Syncing playlist index
+					{:else}
+						{playlists.length} registered {playlists.length === 1 ? 'playlist' : 'playlists'}
+					{/if}
+				</p>
+			</div>
+			<button
+				class="h-9 border border-neutral-700 bg-black px-4 text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
+				onclick={openCreateModal}
+			>
+				Create Playlist
+			</button>
+		</div>
+		<div
+			class="grid gap-3 border-t border-neutral-900 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-600 sm:grid-cols-3 sm:px-6"
+		>
+			<div class="border border-neutral-900 bg-black px-3 py-2">Catalog: Playlist Registry</div>
+			<div class="border border-neutral-900 bg-black px-3 py-2">Mode: Curated Collections</div>
+			<div class="border border-neutral-900 bg-black px-3 py-2">
+				State: {$preferences.incognito ? 'Incognito' : 'Visible'}
+			</div>
+		</div>
 	</div>
 
 	{#if loading}
@@ -98,28 +220,33 @@
 		</div>
 	{:else if error && playlists.length === 0}
 		<div
-			class="border border-neutral-800 p-8 text-center text-neutral-500 uppercase tracking-widest text-sm"
+			class="border border-neutral-800 bg-[#0a0a0a] p-8 text-center text-sm font-bold uppercase tracking-[0.24em] text-neutral-500"
 		>
 			Error: {error}
 		</div>
 	{:else if playlists.length === 0}
-		<div class="border border-neutral-800 p-12 text-center flex flex-col items-center">
-			<p class="text-neutral-400 uppercase tracking-widest mb-2">No Playlists</p>
+		<div class="flex flex-col items-center border border-neutral-800 bg-[#0a0a0a] p-12 text-center">
+			<p class="mb-2 text-[10px] font-bold uppercase tracking-[0.32em] text-neutral-500">
+				No Playlists
+			</p>
 			<p class="text-sm text-neutral-600">Create a playlist to organize your videos.</p>
 		</div>
 	{:else}
-		<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
+		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
 			{#each playlists as playlist (playlist.id)}
 				<div
-					class="border border-neutral-800 bg-black p-4 flex flex-col gap-4 hover:border-neutral-600 transition-colors w-full"
+					class="flex w-full flex-col gap-4 border border-neutral-900 bg-black p-2 transition-colors hover:border-neutral-700"
 				>
-					<a href="/playlists/{playlist.id}" class="block">
+					<a
+						href="/playlists/{playlist.id}"
+						class="block border border-neutral-800 bg-[#0a0a0a] p-2"
+					>
 						<div
 							class="relative aspect-video overflow-hidden border border-neutral-800 bg-neutral-950"
 						>
 							<img
 								src={playlistCoverSrc(playlist)}
-								alt="{playlist.name} cover"
+								alt="{displayPlaylistName(playlist)} cover"
 								class="absolute inset-0 h-full w-full object-cover"
 								class:blur-md={$preferences.incognito}
 								class:brightness-75={$preferences.incognito}
@@ -133,15 +260,15 @@
 							{/if}
 						</div>
 					</a>
-					<div class="flex justify-between items-start">
+					<div class="flex items-start justify-between gap-4 px-1">
 						<a
 							href="/playlists/{playlist.id}"
-							class="text-lg font-semibold text-white hover:underline truncate"
+							class="truncate text-[13px] font-bold uppercase tracking-[0.12em] text-neutral-200 transition-colors hover:text-white"
 						>
-							{playlist.name}
+							{displayPlaylistName(playlist)}
 						</a>
 						<button
-							class="text-neutral-500 hover:text-red-500 transition-colors"
+							class="border border-transparent p-1 text-neutral-500 transition-colors hover:border-neutral-800 hover:text-red-400"
 							onclick={() => deletePlaylist(playlist.id)}
 							aria-label="Delete playlist"
 						>
@@ -152,12 +279,14 @@
 							</svg>
 						</button>
 					</div>
-					<p class="text-sm text-neutral-400 line-clamp-2 min-h-[2.5rem]">
-						{playlist.description || 'No description'}
+					<p class="min-h-[2.5rem] px-1 text-sm text-neutral-500 line-clamp-2">
+						{displayPlaylistDescription(playlist)}
 					</p>
-					<div class="text-xs text-neutral-500 uppercase tracking-widest mt-2">
-						{playlist.item_count}
-						{playlist.item_count === 1 ? 'item' : 'items'}
+					<div
+						class="mt-1 flex items-center justify-between border-t border-neutral-900 px-1 pt-2 text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-600"
+					>
+						<span>Items</span>
+						<span>{playlist.item_count} {playlist.item_count === 1 ? 'Unit' : 'Units'}</span>
 					</div>
 				</div>
 			{/each}
@@ -166,9 +295,25 @@
 </div>
 
 {#if showCreateModal}
-	<div class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-		<div class="w-full max-w-md border border-neutral-800 bg-black p-6 shadow-2xl">
-			<h2 class="text-lg font-semibold text-white mb-4">Create Playlist</h2>
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<button
+			type="button"
+			class="absolute inset-0 bg-black/80 backdrop-blur-sm"
+			aria-label="Close create playlist dialog"
+			onclick={() => closeCreateModal()}
+		></button>
+		<div
+			bind:this={createPlaylistDialogEl}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="create-playlist-title"
+			tabindex="-1"
+			onkeydown={handleCreateDialogKeydown}
+			class="relative z-10 w-full max-w-md border border-neutral-800 bg-black p-6 shadow-2xl"
+		>
+			<h2 id="create-playlist-title" class="text-lg font-semibold text-white mb-4">
+				Create Playlist
+			</h2>
 			<form onsubmit={createPlaylist} class="flex flex-col gap-4">
 				<label class="flex flex-col gap-1">
 					<span class="text-xs uppercase tracking-widest text-neutral-500">Name</span>
@@ -192,7 +337,7 @@
 					<button
 						type="button"
 						class="px-4 py-2 text-xs font-bold uppercase tracking-widest text-neutral-400 hover:text-white"
-						onclick={() => (showCreateModal = false)}
+						onclick={() => closeCreateModal()}
 					>
 						Cancel
 					</button>
