@@ -179,9 +179,9 @@
 </svelte:head>
 
 <div class="mx-auto flex h-full w-full max-w-[1600px] flex-col px-4 py-6 sm:px-6">
-	<div class="mb-6 border border-neutral-800 bg-[#0a0a0a]">
+	<div class="mono-panel mb-6 rounded-[18px]">
 		<div
-			class="flex flex-col gap-4 border-b border-neutral-800 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6"
+			class="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 shadow-[inset_0_-1px_0_rgba(255,255,255,0.03)]"
 		>
 			<div>
 				<p class="text-[10px] font-bold uppercase tracking-[0.32em] text-neutral-500">Archive</p>
@@ -197,18 +197,18 @@
 				</p>
 			</div>
 			<button
-				class="h-9 border border-neutral-700 bg-black px-4 text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
+				class="mono-control h-9 rounded-[8px] px-4 text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-300 transition-colors hover:text-white"
 				onclick={openCreateModal}
 			>
 				Create Playlist
 			</button>
 		</div>
 		<div
-			class="grid gap-3 border-t border-neutral-900 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-600 sm:grid-cols-3 sm:px-6"
+			class="grid gap-3 px-4 py-3 text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-600 sm:grid-cols-3 sm:px-6"
 		>
-			<div class="border border-neutral-900 bg-black px-3 py-2">Catalog: Playlist Registry</div>
-			<div class="border border-neutral-900 bg-black px-3 py-2">Mode: Curated Collections</div>
-			<div class="border border-neutral-900 bg-black px-3 py-2">
+			<div class="mono-panel-soft rounded-[10px] px-3 py-2">Catalog: Playlist Registry</div>
+			<div class="mono-panel-soft rounded-[10px] px-3 py-2">Mode: Curated Collections</div>
+			<div class="mono-panel-soft rounded-[10px] px-3 py-2">
 				State: {$preferences.incognito ? 'Incognito' : 'Visible'}
 			</div>
 		</div>
@@ -220,12 +220,12 @@
 		</div>
 	{:else if error && playlists.length === 0}
 		<div
-			class="border border-neutral-800 bg-[#0a0a0a] p-8 text-center text-sm font-bold uppercase tracking-[0.24em] text-neutral-500"
+			class="mono-panel rounded-[16px] p-8 text-center text-sm font-bold uppercase tracking-[0.24em] text-neutral-500"
 		>
 			Error: {error}
 		</div>
 	{:else if playlists.length === 0}
-		<div class="flex flex-col items-center border border-neutral-800 bg-[#0a0a0a] p-12 text-center">
+		<div class="mono-panel rounded-[16px] flex flex-col items-center p-12 text-center">
 			<p class="mb-2 text-[10px] font-bold uppercase tracking-[0.32em] text-neutral-500">
 				No Playlists
 			</p>
@@ -235,15 +235,10 @@
 		<div class="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4">
 			{#each playlists as playlist (playlist.id)}
 				<div
-					class="flex w-full flex-col gap-4 border border-neutral-900 bg-black p-2 transition-colors hover:border-neutral-700"
+					class="mono-panel-soft mono-panel-hover flex w-full flex-col gap-4 rounded-[14px] p-2.5 transition-colors"
 				>
-					<a
-						href="/playlists/{playlist.id}"
-						class="block border border-neutral-800 bg-[#0a0a0a] p-2"
-					>
-						<div
-							class="relative aspect-video overflow-hidden border border-neutral-800 bg-neutral-950"
-						>
+					<a href="/playlists/{playlist.id}" class="block rounded-[10px] bg-[#1b1c1f] p-2">
+						<div class="relative aspect-video overflow-hidden rounded-[8px] bg-neutral-950">
 							<img
 								src={playlistCoverSrc(playlist)}
 								alt="{displayPlaylistName(playlist)} cover"
@@ -268,7 +263,7 @@
 							{displayPlaylistName(playlist)}
 						</a>
 						<button
-							class="border border-transparent p-1 text-neutral-500 transition-colors hover:border-neutral-800 hover:text-red-400"
+							class="rounded-[6px] p-1 text-neutral-500 transition-colors hover:bg-[#242529] hover:text-red-400"
 							onclick={() => deletePlaylist(playlist.id)}
 							aria-label="Delete playlist"
 						>
@@ -283,7 +278,7 @@
 						{displayPlaylistDescription(playlist)}
 					</p>
 					<div
-						class="mt-1 flex items-center justify-between border-t border-neutral-900 px-1 pt-2 text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-600"
+						class="mt-1 flex items-center justify-between px-1 pt-2 text-[10px] font-bold uppercase tracking-[0.24em] text-neutral-600"
 					>
 						<span>Items</span>
 						<span>{playlist.item_count} {playlist.item_count === 1 ? 'Unit' : 'Units'}</span>
@@ -309,7 +304,7 @@
 			aria-labelledby="create-playlist-title"
 			tabindex="-1"
 			onkeydown={handleCreateDialogKeydown}
-			class="relative z-10 w-full max-w-md border border-neutral-800 bg-black p-6 shadow-2xl"
+			class="mono-panel relative z-10 w-full max-w-md rounded-[18px] p-6 shadow-2xl"
 		>
 			<h2 id="create-playlist-title" class="text-lg font-semibold text-white mb-4">
 				Create Playlist
@@ -320,7 +315,7 @@
 					<input
 						type="text"
 						bind:value={newName}
-						class="h-10 bg-neutral-900 border border-neutral-700 px-3 text-white outline-none focus:border-neutral-500"
+						class="mono-control h-10 rounded-[8px] px-3 text-white outline-none"
 						required
 					/>
 				</label>
@@ -330,7 +325,7 @@
 					>
 					<textarea
 						bind:value={newDescription}
-						class="h-24 bg-neutral-900 border border-neutral-700 p-3 text-white outline-none focus:border-neutral-500 resize-none"
+						class="mono-control h-24 rounded-[8px] p-3 text-white outline-none resize-none"
 					></textarea>
 				</label>
 				<div class="flex justify-end gap-3 mt-4">
@@ -343,7 +338,7 @@
 					</button>
 					<button
 						type="submit"
-						class="bg-white text-black px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-neutral-200 disabled:opacity-50"
+						class="mono-control-active rounded-[8px] px-4 py-2 text-xs font-bold uppercase tracking-widest hover:bg-neutral-200 disabled:opacity-50"
 						disabled={creating || !newName.trim()}
 					>
 						{creating ? 'Creating...' : 'Create'}
