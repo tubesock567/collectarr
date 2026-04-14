@@ -179,9 +179,9 @@
 	</main>
 {:else}
 	<div
-		class="flex h-screen w-full bg-[#17171a] p-2 sm:p-4 overflow-hidden font-mono tracking-tight text-neutral-300"
+		class="flex h-screen w-full overflow-hidden bg-[#141416] font-mono tracking-tight text-neutral-300"
 	>
-		<div class="mono-shell flex flex-1 overflow-hidden rounded-[18px] relative w-full">
+		<div class="mono-shell relative flex flex-1 overflow-hidden w-full rounded-none">
 			<!-- Mobile Top Nav -->
 			<div
 				class="mono-panel sm:hidden absolute top-0 left-0 right-0 z-30 text-white flex items-center justify-between px-4 py-3"
