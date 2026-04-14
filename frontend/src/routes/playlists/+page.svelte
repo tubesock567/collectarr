@@ -108,7 +108,7 @@
 			<p class="text-sm text-neutral-600">Create a playlist to organize your videos.</p>
 		</div>
 	{:else}
-		<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+		<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
 			{#each playlists as playlist (playlist.id)}
 				<div
 					class="border border-neutral-800 bg-black p-4 flex flex-col gap-4 hover:border-neutral-600 transition-colors"
