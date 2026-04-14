@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { page } from '$app/stores';
 	import { authFetch } from '$lib/auth';
+	import { preferences } from '$lib/preferences';
 	import { toast } from '$lib/toast';
 	import MetadataTokenInput from '$lib/components/MetadataTokenInput.svelte';
 	import VideoCard from '$lib/components/VideoCard.svelte';
@@ -33,6 +34,7 @@
 	let savingMetadata = $state(false);
 	let metadataMessage = $state('');
 	let metadataPanelOverlayEl = $state(null);
+	let metadataPanelDialogEl = $state(null);
 
 	let playlists = $state([]);
 	let showPlaylistPanel = $state(false);
@@ -40,10 +42,111 @@
 	let savingPlaylist = $state(false);
 	let playlistMessage = $state('');
 	let playlistPanelOverlayEl = $state(null);
+	let playlistPanelDialogEl = $state(null);
+	let lastDialogTriggerEl = $state(null);
 
 	let continueWatching = $state([]);
 	let loadingContinueWatching = $state(true);
 	let failedContinueWatchingThumbnails = $state({});
+
+	function scrambleText(text) {
+		if (!text) return '';
+		const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
+		let scrambled = '';
+		for (let i = 0; i < text.length; i++) {
+			scrambled += chars[Math.floor(Math.random() * chars.length)];
+		}
+		return scrambled;
+	}
+
+	function displayMediaTitle(title) {
+		if (!title) return '';
+		return $preferences.incognito ? scrambleText(title) : title;
+	}
+
+	function getFocusableElements(container) {
+		if (!container) return [];
+		return Array.from(
+			container.querySelectorAll(
+				'button:not([disabled]), [href], input:not([disabled]), select:not([disabled]), textarea:not([disabled]), [tabindex]:not([tabindex="-1"])'
+			)
+		);
+	}
+
+	function focusDialog(container) {
+		const [firstFocusable] = getFocusableElements(container);
+		if (firstFocusable instanceof HTMLElement) {
+			firstFocusable.focus();
+			return;
+		}
+		container?.focus();
+	}
+
+	function trapDialogFocus(event, container) {
+		if (event.key !== 'Tab' || !container) return;
+
+		const focusableElements = getFocusableElements(container);
+		if (focusableElements.length === 0) {
+			event.preventDefault();
+			container.focus();
+			return;
+		}
+
+		const firstElement = focusableElements[0];
+		const lastElement = focusableElements[focusableElements.length - 1];
+
+		if (event.shiftKey && document.activeElement === firstElement) {
+			event.preventDefault();
+			lastElement.focus();
+		} else if (!event.shiftKey && document.activeElement === lastElement) {
+			event.preventDefault();
+			firstElement.focus();
+		}
+	}
+
+	function openMetadataPanel(event) {
+		lastDialogTriggerEl = event.currentTarget;
+		showMetadataPanel = true;
+	}
+
+	function closeMetadataPanel({ restoreFocus = true } = {}) {
+		showMetadataPanel = false;
+		if (restoreFocus && lastDialogTriggerEl instanceof HTMLElement) {
+			queueMicrotask(() => lastDialogTriggerEl?.focus());
+		}
+	}
+
+	function openPlaylistPanel(event) {
+		lastDialogTriggerEl = event.currentTarget;
+		showPlaylistPanel = true;
+	}
+
+	function closePlaylistPanel({ restoreFocus = true } = {}) {
+		showPlaylistPanel = false;
+		if (restoreFocus && lastDialogTriggerEl instanceof HTMLElement) {
+			queueMicrotask(() => lastDialogTriggerEl?.focus());
+		}
+	}
+
+	function handleMetadataDialogKeydown(event) {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			closeMetadataPanel();
+			return;
+		}
+
+		trapDialogFocus(event, metadataPanelDialogEl);
+	}
+
+	function handlePlaylistDialogKeydown(event) {
+		if (event.key === 'Escape') {
+			event.preventDefault();
+			closePlaylistPanel();
+			return;
+		}
+
+		trapDialogFocus(event, playlistPanelDialogEl);
+	}
 
 	const normalizedSearchQuery = $derived(searchQuery.trim().toLowerCase());
 	const filteredVideos = $derived.by(() => {
@@ -149,7 +252,9 @@
 		const classes = {
 			2: 'grid-cols-1 sm:grid-cols-2',
 			3: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3',
-			4: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4'
+			4: 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4',
+			6: 'grid-cols-2 lg:grid-cols-4 xl:grid-cols-6',
+			8: 'grid-cols-2 md:grid-cols-4 xl:grid-cols-6 2xl:grid-cols-8'
 		};
 		return classes[count] || classes[4];
 	}
@@ -331,7 +436,7 @@
 
 	function clearSelection() {
 		selectedVideoIds = [];
-		showMetadataPanel = false;
+		closeMetadataPanel({ restoreFocus: false });
 		metadataMessage = '';
 		resetBulkDrafts();
 	}
@@ -428,7 +533,7 @@
 			}
 			await loadPlaylists();
 			setTimeout(() => {
-				showPlaylistPanel = false;
+				closePlaylistPanel({ restoreFocus: false });
 				clearSelection();
 			}, 1500);
 		} catch (err) {
@@ -454,11 +559,13 @@
 			});
 			if (!res.ok) throw new Error(await readError(res, 'Failed to create playlist'));
 			const playlist = await res.json();
-			toast.success(`Playlist "${playlist.name}" created with ${playlist?.items?.length || 0} ${(playlist?.items?.length || 0) === 1 ? 'item' : 'items'}`);
+			toast.success(
+				`Playlist "${playlist.name}" created with ${playlist?.items?.length || 0} ${(playlist?.items?.length || 0) === 1 ? 'item' : 'items'}`
+			);
 			await loadPlaylists();
 			newPlaylistName = '';
 			setTimeout(() => {
-				showPlaylistPanel = false;
+				closePlaylistPanel({ restoreFocus: false });
 				clearSelection();
 			}, 1500);
 		} catch (err) {
@@ -518,7 +625,7 @@
 
 	$effect(() => {
 		if (selectedCount === 0) {
-			showMetadataPanel = false;
+			closeMetadataPanel({ restoreFocus: false });
 			metadataMessage = '';
 			resetBulkDrafts();
 			singleTagsDraft = [];
@@ -546,11 +653,12 @@
 		if (showMetadataPanel || showPlaylistPanel) {
 			document.body.style.overflow = 'hidden';
 			queueMicrotask(() => {
-				if (showMetadataPanel) metadataPanelOverlayEl?.focus();
-				if (showPlaylistPanel) playlistPanelOverlayEl?.focus();
+				if (showMetadataPanel) focusDialog(metadataPanelDialogEl);
+				if (showPlaylistPanel) focusDialog(playlistPanelDialogEl);
 			});
 		} else {
 			document.body.style.overflow = '';
+			lastDialogTriggerEl = null;
 		}
 		return () => {
 			document.body.style.overflow = '';
@@ -595,14 +703,25 @@
 	<title>Collectarr - Library</title>
 </svelte:head>
 
-<div class="px-4 sm:px-8 py-8 lg:py-12 max-w-[1600px] mx-auto w-full">
-	<div class="mb-10 flex flex-col gap-6">
-		<div class="w-full relative">
+<div class="flex flex-col h-full w-full relative">
+	<!-- Top utility bar/search -->
+	<div
+		class="flex-shrink-0 border-b border-neutral-800 bg-[#0a0a0a] px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 sticky top-0 z-20 shadow-sm"
+	>
+		<div class="flex items-center gap-4 w-full sm:w-auto flex-1">
 			<label
-				class="flex h-14 w-full items-center overflow-hidden  border border-neutral-800 bg-neutral-950/80 text-white transition-all focus-within:border-neutral-500 focus-within:bg-neutral-900 focus-within:ring-4 focus-within:ring-neutral-800/50 shadow-sm"
+				class="flex h-8 w-full sm:max-w-md items-center overflow-hidden border border-neutral-800 bg-black text-neutral-300 transition-all focus-within:border-neutral-600"
 			>
-				<div class="pl-5 pr-4 text-neutral-500 flex items-center justify-center shrink-0">
-					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+				<div class="pl-3 pr-2 text-neutral-500 flex items-center justify-center shrink-0">
+					<svg
+						class="w-3.5 h-3.5"
+						viewBox="0 0 24 24"
+						fill="none"
+						stroke="currentColor"
+						stroke-width="2"
+						stroke-linecap="round"
+						stroke-linejoin="round"
+					>
 						<circle cx="11" cy="11" r="8"></circle>
 						<line x1="21" y1="21" x2="16.65" y2="16.65"></line>
 					</svg>
@@ -611,23 +730,21 @@
 					type="search"
 					value={searchQuery}
 					oninput={handleSearchInput}
-					placeholder="Search title, date, tags, actors..."
-					class="w-full h-full bg-transparent px-2 text-lg text-white placeholder:text-neutral-600 outline-none"
+					placeholder="SEARCH LIBRARY..."
+					class="w-full h-full bg-transparent px-1 text-[11px] font-bold uppercase tracking-widest text-neutral-200 placeholder:text-neutral-700 outline-none"
 					aria-label="Search videos"
 				/>
 			</label>
-		</div>
 
-		<div class="flex flex-wrap items-center justify-between gap-4">
-			<div class="flex items-center gap-3">
+			<div class="hidden sm:flex items-center gap-2">
 				<button
-					class="h-10 w-10  flex items-center justify-center border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-400 hover:text-white bg-neutral-900/50"
+					class="h-8 px-3 flex items-center justify-center border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-400 hover:text-white bg-black uppercase tracking-widest text-[10px] font-bold"
 					aria-label="Refresh library"
 					onclick={() => loadVideos()}
 					disabled={loading}
 				>
 					<svg
-						class="w-5 h-5"
+						class="w-3 h-3 mr-2"
 						class:animate-spin-full={isSpinning}
 						viewBox="0 0 24 24"
 						fill="currentColor"
@@ -636,364 +753,401 @@
 							d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
 						/>
 					</svg>
+					SYNC
 				</button>
-				
-				<div class="relative" bind:this={desktopSortDropdownEl}>
-					<button
-						class="flex items-center justify-center gap-2 h-10 px-4  text-sm font-medium tracking-wide border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-300 hover:text-white bg-neutral-900/50"
-						onclick={() => (showSortDropdown = !showSortDropdown)}
-						aria-label="Sort options"
-					>
-						<span>Sort: {getSortLabel()}</span>
-						<span
-							class="p-0.5 hover:bg-neutral-700 transition-colors"
-							onclick={(event) => {
-								event.stopPropagation();
-								toggleSortOrder();
-							}}
-							role="button"
-							tabindex="0"
-							onkeydown={(event) => {
-								if (event.key === 'Enter' || event.key === ' ') {
-									event.stopPropagation();
-									toggleSortOrder();
-								}
-							}}
-							aria-label="Toggle sort order"
-							title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
-						>
-							<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
-								{#if sortOrder === 'asc'}
-									<path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z" />
-								{:else}
-									<path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z" />
-								{/if}
-							</svg>
-						</span>
-					</button>
-					{#if showSortDropdown}
-						<div
-							class="absolute top-full left-0 mt-2 w-48  bg-neutral-900 border border-neutral-700 shadow-2xl z-30 overflow-hidden"
-						>
-							<button
-								class="w-full px-4 py-3 text-sm text-left hover:bg-neutral-800 transition-colors {sortBy ===
-								'dateAdded'
-									? 'text-white font-medium bg-neutral-800/50'
-									: 'text-neutral-300'}"
-								onclick={() => setSort('dateAdded')}>Date added</button
-							>
-							<button
-								class="w-full px-4 py-3 text-sm text-left hover:bg-neutral-800 transition-colors {sortBy ===
-								'duration'
-									? 'text-white font-medium bg-neutral-800/50'
-									: 'text-neutral-300'}"
-								onclick={() => setSort('duration')}>Duration</button
-							>
-							<button
-								class="w-full px-4 py-3 text-sm text-left hover:bg-neutral-800 transition-colors {sortBy ===
-								'alphabetical'
-									? 'text-white font-medium bg-neutral-800/50'
-									: 'text-neutral-300'}"
-								onclick={() => setSort('alphabetical')}>Alphabetical</button
-							>
-						</div>
-					{/if}
-				</div>
 			</div>
+		</div>
 
-			<div class="flex items-center gap-3">
-				<div class="hidden sm:block relative" bind:this={columnDropdownEl}>
-					<button
-						class="flex items-center gap-2 h-10 px-4  text-sm font-medium tracking-wide border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-300 hover:text-white bg-neutral-900/50"
-						onclick={() => (showColumnDropdown = !showColumnDropdown)}
-						aria-label="Column count options"
-					>
-						<span>Grid: {columnCount}</span>
-						<svg class="w-4 h-4 opacity-70" viewBox="0 0 24 24" fill="currentColor">
-							<path d="M7 10l5 5 5-5z" />
-						</svg>
-					</button>
-					{#if showColumnDropdown}
-						<div
-							class="absolute top-full right-0 mt-2 w-40  bg-neutral-900 border border-neutral-700 shadow-2xl z-30 overflow-hidden"
-						>
-							{#each [2, 3, 4] as count}
-								<button
-									class="w-full px-4 py-3 text-sm text-left hover:bg-neutral-800 transition-colors {columnCount ===
-									count
-										? 'text-white font-medium bg-neutral-800/50'
-										: 'text-neutral-300'}"
-									onclick={() => setColumnCount(count)}>{count} columns</button
-								>
-							{/each}
-						</div>
-					{/if}
-				</div>
-
+		<!-- Controls -->
+		<div class="flex items-center gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
+			<div class="relative flex items-center" bind:this={desktopSortDropdownEl}>
 				<button
-					class="h-10 px-5  text-sm font-medium tracking-wide border transition-colors {selectionMode
-						? 'border-white bg-white text-black hover:bg-neutral-200'
-						: 'border-neutral-800 bg-neutral-900/50 text-neutral-300 hover:text-white hover:border-neutral-600'}"
-					onclick={toggleSelectionMode}
-					aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+					class="flex items-center justify-center gap-2 h-8 px-3 text-[10px] uppercase tracking-widest font-bold border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-400 hover:text-white bg-black whitespace-nowrap"
+					onclick={() => (showSortDropdown = !showSortDropdown)}
+					aria-label="Sort options"
 				>
-					{selectionMode ? 'Done' : 'Select'}
+					<span>{getSortLabel()}</span>
 				</button>
+				<button
+					class="ml-1 flex h-8 w-8 items-center justify-center border border-neutral-800 bg-black text-neutral-400 transition-colors hover:border-neutral-600 hover:text-white"
+					onclick={toggleSortOrder}
+					aria-label="Toggle sort order"
+					title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
+				>
+					<svg class="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+						{#if sortOrder === 'asc'}
+							<path d="M4 12l1.41 1.41L11 7.83V20h2V7.83l5.58 5.59L20 12l-8-8-8 8z" />
+						{:else}
+							<path d="M20 12l-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z" />
+						{/if}
+					</svg>
+				</button>
+				{#if showSortDropdown}
+					<div
+						class="absolute top-full right-0 mt-1 w-36 bg-[#111] border border-neutral-700 shadow-2xl z-30 overflow-hidden text-[10px] uppercase font-bold tracking-widest"
+					>
+						<button
+							class="w-full px-3 py-2 text-left hover:bg-neutral-800 transition-colors {sortBy ===
+							'dateAdded'
+								? 'text-white bg-neutral-800/50 border-l-2 border-white'
+								: 'text-neutral-400'}"
+							onclick={() => setSort('dateAdded')}>Date Added</button
+						>
+						<button
+							class="w-full px-3 py-2 text-left hover:bg-neutral-800 transition-colors {sortBy ===
+							'duration'
+								? 'text-white bg-neutral-800/50 border-l-2 border-white'
+								: 'text-neutral-400'}"
+							onclick={() => setSort('duration')}>Duration</button
+						>
+						<button
+							class="w-full px-3 py-2 text-left hover:bg-neutral-800 transition-colors {sortBy ===
+							'alphabetical'
+								? 'text-white bg-neutral-800/50 border-l-2 border-white'
+								: 'text-neutral-400'}"
+							onclick={() => setSort('alphabetical')}>Alphabetical</button
+						>
+					</div>
+				{/if}
 			</div>
+
+			<div class="hidden sm:block relative" bind:this={columnDropdownEl}>
+				<button
+					class="flex items-center gap-2 h-8 px-3 text-[10px] uppercase tracking-widest font-bold border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-400 hover:text-white bg-black whitespace-nowrap"
+					onclick={() => (showColumnDropdown = !showColumnDropdown)}
+					aria-label="Column count options"
+				>
+					<span>Grid: {columnCount}</span>
+					<svg class="w-3 h-3 opacity-70" viewBox="0 0 24 24" fill="currentColor"
+						><path d="M7 10l5 5 5-5z" /></svg
+					>
+				</button>
+				{#if showColumnDropdown}
+					<div
+						class="absolute top-full right-0 mt-1 w-32 bg-[#111] border border-neutral-700 shadow-2xl z-30 overflow-hidden text-[10px] uppercase font-bold tracking-widest"
+					>
+						{#each [2, 3, 4, 6, 8] as count}
+							<button
+								class="w-full px-3 py-2 text-left hover:bg-neutral-800 transition-colors {columnCount ===
+								count
+									? 'text-white bg-neutral-800/50 border-l-2 border-white'
+									: 'text-neutral-400'}"
+								onclick={() => setColumnCount(count)}>{count} Cols</button
+							>
+						{/each}
+					</div>
+				{/if}
+			</div>
+
+			<button
+				class="h-8 px-4 text-[10px] uppercase tracking-widest font-bold border transition-colors whitespace-nowrap {selectionMode
+					? 'border-white bg-white text-black hover:bg-neutral-200'
+					: 'border-neutral-800 bg-black text-neutral-400 hover:text-white hover:border-neutral-600'}"
+				onclick={toggleSelectionMode}
+				aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
+			>
+				{selectionMode ? 'DONE' : 'SELECT'}
+			</button>
 		</div>
 	</div>
 
-	{#if selectionMode && !loading && videos.length > 0}
-		<div class="mb-6 border border-neutral-800 bg-black/70 px-4 py-4">
-			<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
-				<div>
-					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Selection</p>
-					<p class="mt-2 text-sm text-white">
-						{#if selectedCount > 0}
-							{selectedCount} selected {selectedCount === 1 ? 'video group' : 'video groups'}
-						{:else}
-							Select videos directly from the grid to edit tags and actors here.
-						{/if}
-					</p>
-				</div>
-
-				<div class="flex flex-wrap items-center gap-2">
-					{#if selectedCount > 0}
-						<button
-							class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors"
-							onclick={() => (showPlaylistPanel = true)}
-						>
-							Add to Playlist
-						</button>
-						<button
-							class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors"
-							onclick={() => (showMetadataPanel = true)}
-						>
-							Edit selection
-						</button>
-						<button
-							class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 text-white hover:border-neutral-400 hover:bg-neutral-800 transition-colors"
-							onclick={clearSelection}
-						>
-							Clear
-						</button>
-					{/if}
-				</div>
-			</div>
-		</div>
-	{/if}
-
-	{#if !loading && continueWatching.length > 0}
-		<div class="mb-8">
-			<div class="flex items-center justify-between mb-4">
-				<h2 class="text-lg font-bold uppercase tracking-widest text-white">Continue Watching</h2>
-				<a href="/player/{continueWatching[0].video_id}" class="text-xs uppercase tracking-wider text-neutral-400 hover:text-white transition-colors">
-					Resume Latest →
-				</a>
-			</div>
-			<div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-4">
-				{#each continueWatching as item (item.video_id)}
-					<a href="/player/{item.video_id}" class="group block">
-						<div class="relative aspect-video bg-neutral-900 border border-neutral-800 overflow-hidden">
-							{#if item.thumbnail_url && !failedContinueWatchingThumbnails[item.video_id]}
-								<img src={item.thumbnail_url} alt={item.title} class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity" onerror={() => {
-									failedContinueWatchingThumbnails = {
-										...failedContinueWatchingThumbnails,
-										[item.video_id]: true
-									};
-								}} />
+	<div class="px-4 sm:px-6 py-6 w-full flex-1">
+		{#if selectionMode && !loading && videos.length > 0}
+			<div class="mb-6 border border-neutral-800 bg-black/70 px-4 py-4">
+				<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
+					<div>
+						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Selection</p>
+						<p class="mt-2 text-sm text-white">
+							{#if selectedCount > 0}
+								{selectedCount} selected {selectedCount === 1 ? 'video group' : 'video groups'}
 							{:else}
-								<div class="w-full h-full flex items-center justify-center">
-									<svg class="w-8 h-8 text-neutral-600" viewBox="0 0 24 24" fill="currentColor">
-										<path d="M8 5v14l11-7z"/>
-									</svg>
-								</div>
+								Select videos directly from the grid to edit tags and actors here.
 							{/if}
-							<div class="absolute bottom-0 left-0 right-0 h-1 bg-neutral-800">
-								<div class="h-full bg-white" style="width: {item.progress_pct}%"></div>
-							</div>
-							<div class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-								<div class="w-12 h-12  bg-white/90 flex items-center justify-center">
-									<svg class="w-6 h-6 text-black ml-1" viewBox="0 0 24 24" fill="currentColor">
-										<path d="M8 5v14l11-7z"/>
-									</svg>
-								</div>
-							</div>
-						</div>
-						<div class="mt-2">
-							<p class="text-sm text-white truncate">{item.title}</p>
-							<p class="text-xs text-neutral-500">{Math.round(item.progress_pct)}% watched</p>
-						</div>
-					</a>
-				{/each}
-			</div>
-		</div>
-	{/if}
+						</p>
+					</div>
 
-	{#if loading}
-		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-			<span class="loading loading-spinner loading-lg text-white"></span>
-			<p class="text-neutral-500 uppercase tracking-widest text-sm">Loading...</p>
-		</div>
-	{:else if error && videos.length === 0}
-		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-			<div class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md">
-				<div class="w-16 h-16 mb-4 text-neutral-700">
-					<svg viewBox="0 0 24 24" fill="currentColor">
-						<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"/>
-					</svg>
+					<div class="flex flex-wrap items-center gap-2">
+						{#if selectedCount > 0}
+							<button
+								class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors"
+								onclick={openPlaylistPanel}
+							>
+								Add to Playlist
+							</button>
+							<button
+								class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors"
+								onclick={openMetadataPanel}
+							>
+								Edit selection
+							</button>
+							<button
+								class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 text-white hover:border-neutral-400 hover:bg-neutral-800 transition-colors"
+								onclick={clearSelection}
+							>
+								Clear
+							</button>
+						{/if}
+					</div>
 				</div>
-				<p class="text-neutral-400 uppercase tracking-widest mb-4">Error Loading Library</p>
-				<p class="text-sm text-neutral-600 mb-6">{error}</p>
-				<button onclick={() => window.location.reload()} class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors">
-					Retry
-				</button>
-			</div>
-		</div>
-	{:else if videos.length === 0}
-		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-			<div class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md">
-				<div class="w-16 h-16 mb-4 text-neutral-700">
-					<svg viewBox="0 0 24 24" fill="currentColor">
-						<path d="M9.75 15.5a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 1 1.13-.65l4.5 2.25a.75.75 0 0 1 0 1.34l-4.5 2.25a.75.75 0 0 1-.38.1Z"/>
-						<path d="M2 6.5a4 4 0 0 1 4-4h12a4 4 0 0 1 4 4v11a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4v-11Zm4-2.5a2.5 2.5 0 0 0-2.5 2.5v11a2.5 2.5 0 0 0 2.5 2.5h12a2.5 2.5 0 0 0 2.5-2.5v-11a2.5 2.5 0 0 0-2.5-2.5H6Z"/>
-					</svg>
-				</div>
-				<p class="text-neutral-400 uppercase tracking-widest mb-4">Welcome to Collectarr</p>
-				<p class="text-sm text-neutral-600 mb-2">
-					Your video library is empty.
-				</p>
-				<p class="text-sm text-neutral-600 mb-6">
-					Add your media path in settings and run a scan to get started.
-				</p>
-				<a
-					href="/settings"
-					class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
-					>Go to Settings</a
-				>
-			</div>
-		</div>
-	{:else if filteredVideos.length === 0}
-		<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-			<div class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md">
-				<div class="w-16 h-16 mb-4 text-neutral-700">
-					<svg viewBox="0 0 24 24" fill="currentColor">
-						<path d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 0 0 1.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 0 0-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 0 0 5.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-					</svg>
-				</div>
-				<p class="text-neutral-400 uppercase tracking-widest mb-4">No Matching Videos</p>
-				<p class="text-sm text-neutral-600 mb-6">
-					No videos found matching "{searchQuery}".
-				</p>
-				<button onclick={() => { searchQuery = ''; currentPage = 1; }} class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors">
-					Clear Search
-				</button>
-			</div>
-		</div>
-	{:else}
-		<div
-			class="text-xs text-neutral-500 uppercase tracking-wider mb-4 flex flex-wrap items-center gap-2"
-		>
-			<span
-				>Showing {(currentPage - 1) * itemsPerPage + 1} - {Math.min(
-					currentPage * itemsPerPage,
-					filteredVideos.length
-				)} of {filteredVideos.length} videos</span
-			>
-		</div>
-
-		<div class="grid {getColumnClass(columnCount)} gap-6">
-			{#each paginatedVideos as video (video.id)}
-				<VideoCard
-					{video}
-					selectable={selectionMode}
-					selected={selectedVideoIds.includes(video.id)}
-					onToggleSelect={toggleVideoSelection}
-				/>
-			{/each}
-		</div>
-
-		{#if totalPages > 1}
-			<div class="flex justify-center items-center gap-2 mt-8">
-				<button
-					class="flex h-12 w-12 items-center justify-center border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-					onclick={() => goToPage(currentPage - 1)}
-					disabled={currentPage === 1}
-					aria-label="Previous page"
-				>
-					<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"
-						><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" /></svg
-					>
-				</button>
-
-				{#each Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
-					let start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
-					return start + i;
-				}) as pageNum}
-					<button
-						class="flex h-12 w-12 items-center justify-center border text-xs font-mono transition-colors {currentPage ===
-						pageNum
-							? 'bg-neutral-700 text-white border-neutral-600'
-							: 'text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white'}"
-						onclick={() => goToPage(pageNum)}
-						aria-label="Page {pageNum}">{pageNum}</button
-					>
-				{/each}
-
-				{#if totalPages > 5 && currentPage < totalPages - 2}
-					<span class="text-neutral-500 px-1">...</span>
-				{/if}
-
-				{#if totalPages > 5 && currentPage < totalPages - 2}
-					<button
-						class="flex h-12 min-w-12 items-center justify-center border border-neutral-700 px-3 text-xs font-mono text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white"
-						onclick={() => goToPage(totalPages)}
-						aria-label="Last page">{totalPages}</button
-					>
-				{/if}
-
-				<button
-					class="flex h-12 w-12 items-center justify-center border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
-					onclick={() => goToPage(currentPage + 1)}
-					disabled={currentPage === totalPages}
-					aria-label="Next page"
-				>
-					<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"
-						><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" /></svg
-					>
-				</button>
 			</div>
 		{/if}
-	{/if}
+
+		{#if !loading && continueWatching.length > 0}
+			<div class="mb-8 border-b border-neutral-900 pb-8">
+				<div class="flex items-center justify-between mb-4">
+					<h2 class="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">
+						Continue Watching
+					</h2>
+					<a
+						href="/player/{continueWatching[0].video_id}"
+						class="text-[10px] font-bold uppercase tracking-[0.2em] text-neutral-500 hover:text-white transition-colors"
+					>
+						Resume Latest →
+					</a>
+				</div>
+				<div
+					class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-6 xl:grid-cols-8 gap-3"
+				>
+					{#each continueWatching as item (item.video_id)}
+						<a
+							href="/player/{item.video_id}"
+							class="group block border border-neutral-900 p-1 hover:border-neutral-700 transition-colors bg-black"
+						>
+							<div
+								class="relative aspect-video bg-[#0a0a0a] border border-neutral-800 overflow-hidden"
+							>
+								{#if item.thumbnail_url && !failedContinueWatchingThumbnails[item.video_id]}
+									<img
+										src={item.thumbnail_url}
+										alt={displayMediaTitle(item.title)}
+										class="w-full h-full object-cover opacity-80 group-hover:opacity-100 transition-opacity"
+										onerror={() => {
+											failedContinueWatchingThumbnails = {
+												...failedContinueWatchingThumbnails,
+												[item.video_id]: true
+											};
+										}}
+									/>
+								{:else}
+									<div class="w-full h-full flex items-center justify-center">
+										<svg class="w-8 h-8 text-neutral-600" viewBox="0 0 24 24" fill="currentColor">
+											<path d="M8 5v14l11-7z" />
+										</svg>
+									</div>
+								{/if}
+								<div class="absolute bottom-0 left-0 right-0 h-1 bg-neutral-800">
+									<div class="h-full bg-white" style="width: {item.progress_pct}%"></div>
+								</div>
+								<div
+									class="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+								>
+									<div class="w-12 h-12 bg-white/90 flex items-center justify-center">
+										<svg class="w-6 h-6 text-black ml-1" viewBox="0 0 24 24" fill="currentColor">
+											<path d="M8 5v14l11-7z" />
+										</svg>
+									</div>
+								</div>
+							</div>
+							<div class="mt-1.5 px-0.5">
+								<p
+									class="text-[11px] font-bold uppercase tracking-wide text-neutral-300 truncate group-hover:text-white transition-colors"
+								>
+									{displayMediaTitle(item.title)}
+								</p>
+								<p
+									class="text-[9px] font-bold tracking-[0.2em] text-neutral-600 mt-1 uppercase border-t border-neutral-900 pt-1 group-hover:border-neutral-800 transition-colors"
+								>
+									{Math.round(item.progress_pct)}% WATCHED
+								</p>
+							</div>
+						</a>
+					{/each}
+				</div>
+			</div>
+		{/if}
+
+		{#if loading}
+			<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+				<span class="loading loading-spinner loading-lg text-white"></span>
+				<p class="text-neutral-500 uppercase tracking-widest text-sm">Loading...</p>
+			</div>
+		{:else if error && videos.length === 0}
+			<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+				<div
+					class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md"
+				>
+					<div class="w-16 h-16 mb-4 text-neutral-700">
+						<svg viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-2h2v2zm0-4h-2V7h2v6z"
+							/>
+						</svg>
+					</div>
+					<p class="text-neutral-400 uppercase tracking-widest mb-4">Error Loading Library</p>
+					<p class="text-sm text-neutral-600 mb-6">{error}</p>
+					<button
+						onclick={() => window.location.reload()}
+						class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
+					>
+						Retry
+					</button>
+				</div>
+			</div>
+		{:else if videos.length === 0}
+			<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+				<div
+					class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md"
+				>
+					<div class="w-16 h-16 mb-4 text-neutral-700">
+						<svg viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M9.75 15.5a.75.75 0 0 1-.75-.75v-4.5a.75.75 0 0 1 1.13-.65l4.5 2.25a.75.75 0 0 1 0 1.34l-4.5 2.25a.75.75 0 0 1-.38.1Z"
+							/>
+							<path
+								d="M2 6.5a4 4 0 0 1 4-4h12a4 4 0 0 1 4 4v11a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4v-11Zm4-2.5a2.5 2.5 0 0 0-2.5 2.5v11a2.5 2.5 0 0 0 2.5 2.5h12a2.5 2.5 0 0 0 2.5-2.5v-11a2.5 2.5 0 0 0-2.5-2.5H6Z"
+							/>
+						</svg>
+					</div>
+					<p class="text-neutral-400 uppercase tracking-widest mb-4">Welcome to Collectarr</p>
+					<p class="text-sm text-neutral-600 mb-2">Your video library is empty.</p>
+					<p class="text-sm text-neutral-600 mb-6">
+						Add your media path in settings and run a scan to get started.
+					</p>
+					<a
+						href="/settings"
+						class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
+						>Go to Settings</a
+					>
+				</div>
+			</div>
+		{:else if filteredVideos.length === 0}
+			<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
+				<div
+					class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md"
+				>
+					<div class="w-16 h-16 mb-4 text-neutral-700">
+						<svg viewBox="0 0 24 24" fill="currentColor">
+							<path
+								d="M15.5 14h-.79l-.28-.27a6.5 6.5 0 0 0 1.48-5.34c-.47-2.78-2.79-5-5.59-5.34a6.505 6.505 0 0 0-7.27 7.27c.34 2.8 2.56 5.12 5.34 5.59a6.5 6.5 0 0 0 5.34-1.48l.27.28v.79l4.25 4.25c.41.41 1.08.41 1.49 0 .41-.41.41-1.08 0-1.49L15.5 14zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"
+							/>
+						</svg>
+					</div>
+					<p class="text-neutral-400 uppercase tracking-widest mb-4">No Matching Videos</p>
+					<p class="text-sm text-neutral-600 mb-6">
+						No videos found matching "{searchQuery}".
+					</p>
+					<button
+						onclick={() => {
+							searchQuery = '';
+							currentPage = 1;
+						}}
+						class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
+					>
+						Clear Search
+					</button>
+				</div>
+			</div>
+		{:else}
+			<div
+				class="text-xs text-neutral-500 uppercase tracking-wider mb-4 flex flex-wrap items-center gap-2"
+			>
+				<span
+					>Showing {(currentPage - 1) * itemsPerPage + 1} - {Math.min(
+						currentPage * itemsPerPage,
+						filteredVideos.length
+					)} of {filteredVideos.length} videos</span
+				>
+			</div>
+
+			<div class="grid {getColumnClass(columnCount)} gap-6">
+				{#each paginatedVideos as video (video.id)}
+					<VideoCard
+						{video}
+						selectable={selectionMode}
+						selected={selectedVideoIds.includes(video.id)}
+						onToggleSelect={toggleVideoSelection}
+					/>
+				{/each}
+			</div>
+
+			{#if totalPages > 1}
+				<div class="flex justify-center items-center gap-2 mt-8">
+					<button
+						class="flex h-12 w-12 items-center justify-center border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+						onclick={() => goToPage(currentPage - 1)}
+						disabled={currentPage === 1}
+						aria-label="Previous page"
+					>
+						<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"
+							><path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z" /></svg
+						>
+					</button>
+
+					{#each Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+						let start = Math.max(1, Math.min(currentPage - 2, totalPages - 4));
+						return start + i;
+					}) as pageNum}
+						<button
+							class="flex h-12 w-12 items-center justify-center border text-xs font-mono transition-colors {currentPage ===
+							pageNum
+								? 'bg-neutral-700 text-white border-neutral-600'
+								: 'text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white'}"
+							onclick={() => goToPage(pageNum)}
+							aria-label="Page {pageNum}">{pageNum}</button
+						>
+					{/each}
+
+					{#if totalPages > 5 && currentPage < totalPages - 2}
+						<span class="text-neutral-500 px-1">...</span>
+					{/if}
+
+					{#if totalPages > 5 && currentPage < totalPages - 2}
+						<button
+							class="flex h-12 min-w-12 items-center justify-center border border-neutral-700 px-3 text-xs font-mono text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white"
+							onclick={() => goToPage(totalPages)}
+							aria-label="Last page">{totalPages}</button
+						>
+					{/if}
+
+					<button
+						class="flex h-12 w-12 items-center justify-center border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+						onclick={() => goToPage(currentPage + 1)}
+						disabled={currentPage === totalPages}
+						aria-label="Next page"
+					>
+						<svg class="w-5 h-5" viewBox="0 0 24 24" fill="currentColor"
+							><path d="M10 6L8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6z" /></svg
+						>
+					</button>
+				</div>
+			{/if}
+		{/if}
+	</div>
 </div>
 
 {#if selectionMode && selectedCount > 0 && showMetadataPanel}
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-		bind:this={metadataPanelOverlayEl}
-		role="button"
-		tabindex="0"
-		aria-label="Close metadata editor"
-		onclick={(e) => {
-			if (e.target === e.currentTarget) showMetadataPanel = false;
-		}}
-		onkeydown={(e) => {
-			if (e.target !== e.currentTarget) return;
-			if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
-				e.preventDefault();
-				showMetadataPanel = false;
-			}
-		}}
-	>
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<button
+			type="button"
+			class="absolute inset-0 bg-black/80 backdrop-blur-sm"
+			aria-label="Close metadata editor"
+			onclick={() => closeMetadataPanel()}
+		></button>
 		<div
-			class="w-full max-w-2xl max-h-[90vh] overflow-hidden border border-neutral-800 bg-black shadow-2xl"
+			bind:this={metadataPanelDialogEl}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="metadata-editor-title"
+			tabindex="-1"
+			onkeydown={handleMetadataDialogKeydown}
+			class="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-hidden border border-neutral-800 bg-black shadow-2xl"
 		>
 			<div class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5">
 				<div>
 					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Metadata Editor</p>
-					<h2 class="mt-2 text-lg font-semibold text-white">
+					<h2 id="metadata-editor-title" class="mt-2 text-lg font-semibold text-white">
 						{#if selectedCount === 1}
-							{singleSelectedVideo?.title || 'Selected video'}
+							{displayMediaTitle(singleSelectedVideo?.title) || 'Selected video'}
 						{:else}
 							{selectedCount} selected video groups
 						{/if}
@@ -1002,7 +1156,7 @@
 				<button
 					class="mt-0.5 text-neutral-400 hover:text-white transition-colors"
 					aria-label="Close metadata editor"
-					onclick={() => (showMetadataPanel = false)}
+					onclick={() => closeMetadataPanel()}
 				>
 					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"
 						><path
@@ -1121,7 +1275,7 @@
 					</button>
 					<button
 						class="border border-neutral-700 px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
-						onclick={() => (showMetadataPanel = false)}
+						onclick={() => closeMetadataPanel()}
 					>
 						Cancel
 					</button>
@@ -1135,32 +1289,28 @@
 {/if}
 
 {#if selectionMode && selectedCount > 0 && showPlaylistPanel}
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm"
-		bind:this={playlistPanelOverlayEl}
-		role="button"
-		tabindex="0"
-		aria-label="Close playlist panel"
-		onclick={(e) => {
-			if (e.target === e.currentTarget) showPlaylistPanel = false;
-		}}
-		onkeydown={(e) => {
-			if (e.target !== e.currentTarget) return;
-			if (e.key === 'Enter' || e.key === ' ' || e.key === 'Escape') {
-				e.preventDefault();
-				showPlaylistPanel = false;
-			}
-		}}
-	>
+	<div class="fixed inset-0 z-50 flex items-center justify-center p-4">
+		<button
+			type="button"
+			class="absolute inset-0 bg-black/80 backdrop-blur-sm"
+			aria-label="Close playlist panel"
+			onclick={() => closePlaylistPanel()}
+		></button>
 		<div
-			class="w-full max-w-lg overflow-hidden border border-neutral-800 bg-black shadow-2xl flex flex-col max-h-[90vh]"
+			bind:this={playlistPanelDialogEl}
+			role="dialog"
+			aria-modal="true"
+			aria-labelledby="playlist-editor-title"
+			tabindex="-1"
+			onkeydown={handlePlaylistDialogKeydown}
+			class="relative z-10 w-full max-w-lg overflow-hidden border border-neutral-800 bg-black shadow-2xl flex flex-col max-h-[90vh]"
 		>
 			<div
 				class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5 shrink-0"
 			>
 				<div>
 					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Playlists</p>
-					<h2 class="mt-2 text-lg font-semibold text-white">
+					<h2 id="playlist-editor-title" class="mt-2 text-lg font-semibold text-white">
 						Add {selectedCount}
 						{selectedCount === 1 ? 'video' : 'videos'} to playlist
 					</h2>
@@ -1168,7 +1318,7 @@
 				<button
 					class="mt-0.5 text-neutral-400 hover:text-white transition-colors"
 					aria-label="Close playlist panel"
-					onclick={() => (showPlaylistPanel = false)}
+					onclick={() => closePlaylistPanel()}
 				>
 					<svg class="w-6 h-6" viewBox="0 0 24 24" fill="currentColor"
 						><path
@@ -1223,7 +1373,9 @@
 									onclick={() => addToPlaylist(playlist.id)}
 									disabled={savingPlaylist}
 								>
-									<span class="text-sm text-white font-medium truncate pr-4">{playlist.name}</span>
+									<span class="text-sm text-white font-medium truncate pr-4"
+										>{displayMediaTitle(playlist.name)}</span
+									>
 									<span class="text-xs text-neutral-500 shrink-0">{playlist.item_count} items</span>
 								</button>
 							{/each}
@@ -1241,7 +1393,7 @@
 			<div class="border-t border-neutral-800 px-6 py-5 shrink-0">
 				<button
 					class="w-full h-10 border border-neutral-700 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
-					onclick={() => (showPlaylistPanel = false)}
+					onclick={() => closePlaylistPanel()}
 				>
 					Close
 				</button>

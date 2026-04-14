@@ -114,10 +114,14 @@
 	}
 </script>
 
-<div class="group relative flex flex-col space-y-3 cursor-pointer">
+<div
+	class="group relative flex flex-col space-y-2 cursor-pointer p-2 border border-neutral-900 hover:border-neutral-700 bg-black transition-colors duration-300 {selected
+		? 'border-white bg-neutral-900/50'
+		: ''}"
+>
 	<a
 		{href}
-		class="flex flex-col space-y-3"
+		class="flex flex-col space-y-2"
 		onmouseenter={startHover}
 		onmouseleave={stopHover}
 		onfocus={startHover}
@@ -125,17 +129,14 @@
 		onclick={handleCardClick}
 	>
 		<div
-			class="w-full aspect-video bg-neutral-900 border overflow-hidden relative transition-all duration-300 {selected
-				? 'border-white ring-2 ring-white ring-offset-2 ring-offset-black'
-				: 'border-neutral-800 group-hover:border-neutral-500'}"
+			class="w-full aspect-video bg-[#0a0a0a] border border-neutral-800 overflow-hidden relative transition-colors duration-300 {selected
+				? 'border-white'
+				: 'group-hover:border-neutral-500'}"
 		>
 			<img
 				src={`/api/video/${video.id}/thumbnail`}
 				alt={displayTitle}
-				class="w-full h-full object-cover transition-transform duration-700 ease-out {hovered &&
-				!previewLoaded
-					? 'group-hover:scale-105'
-					: ''}"
+				class="w-full h-full object-cover grayscale opacity-80 group-hover:grayscale-0 group-hover:opacity-100 transition-all duration-500"
 				onerror={(e) => {
 					e.target.style.display = 'none';
 				}}
@@ -159,25 +160,29 @@
 			{/if}
 
 			{#if firstVariant}
-				<div class="absolute top-2 left-2">
+				<div
+					class="absolute top-0 left-0 bg-black border-b border-r border-neutral-800 flex items-center"
+				>
 					{#if hasMultiple}
 						<div class="relative group/resolutions">
 							<span
-								class="bg-black/80 px-2 py-1 text-[10px] font-mono tracking-wider text-white leading-none flex items-center h-5 cursor-help"
+								class="px-1.5 py-0.5 text-[9px] font-bold tracking-[0.2em] text-neutral-400 leading-none flex items-center cursor-help transition-colors group-hover/resolutions:text-white"
 							>
 								{firstVariant.quality}
 							</span>
-							<div class="absolute top-full left-0 mt-1 hidden group-hover/resolutions:block z-10">
+							<div
+								class="absolute top-full left-0 hidden group-hover/resolutions:block z-10 border border-neutral-700 bg-black"
+							>
 								<div
-									class="bg-black/90 border border-neutral-700 px-2 py-1.5 text-[10px] font-mono text-white whitespace-nowrap"
+									class="px-2 py-1 text-[9px] font-bold tracking-widest text-white whitespace-nowrap"
 								>
-									{displayVariants.map((variant) => variant.quality).join(', ')}
+									{displayVariants.map((variant) => variant.quality).join(' / ')}
 								</div>
 							</div>
 						</div>
 					{:else}
 						<span
-							class="bg-black/80 px-2 py-1 text-[10px] font-mono tracking-wider text-white leading-none flex items-center h-5"
+							class="px-1.5 py-0.5 text-[9px] font-bold tracking-[0.2em] text-neutral-400 leading-none flex items-center"
 						>
 							{firstVariant.quality}
 						</span>
@@ -188,15 +193,15 @@
 			{#if selectable}
 				<button
 					type="button"
-					class="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center border transition-all {selected
-						? 'border-white bg-black text-white hover:bg-black'
-						: 'border-white/40 bg-black/80 text-white hover:border-white hover:bg-black'}"
-				onclick={handleSelectionButtonClick}
-				aria-label={selected ? `Deselect ${displayTitle}` : `Select ${displayTitle}`}
+					class="absolute right-0 top-0 z-10 flex h-6 w-6 items-center justify-center border-b border-l bg-black transition-colors {selected
+						? 'border-white text-black bg-white hover:bg-neutral-200'
+						: 'border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-600'}"
+					onclick={handleSelectionButtonClick}
+					aria-label={selected ? `Deselect ${displayTitle}` : `Select ${displayTitle}`}
 				>
 					{#if selected}
 						<svg
-							class="w-5 h-5 flex-shrink-0"
+							class="w-3.5 h-3.5 flex-shrink-0"
 							viewBox="0 0 24 24"
 							fill="currentColor"
 							aria-hidden="true"
@@ -204,33 +209,44 @@
 							<path d="M9 16.17L4.83 12l-1.41 1.41L9 19 21 7l-1.41-1.41z" />
 						</svg>
 					{:else}
-						<span class="text-sm font-mono leading-none">+</span>
+						<svg
+							class="w-3.5 h-3.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+							viewBox="0 0 24 24"
+							fill="currentColor"
+							aria-hidden="true"
+						>
+							<path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z" />
+						</svg>
 					{/if}
 				</button>
 			{/if}
 
 			<div
-				class="absolute bottom-2 right-2 bg-black/80 px-2 py-1 text-[10px] font-mono tracking-wider text-white"
+				class="absolute bottom-0 right-0 bg-black border-t border-l border-neutral-800 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.2em] text-neutral-400 group-hover:text-white transition-colors"
 			>
 				{formatDuration(video.duration)}
 			</div>
 
 			{#if hovered && !previewLoaded && previewRequested && !previewFailed}
 				<div
-					class="absolute inset-0 flex items-center justify-center bg-black/40 text-[10px] uppercase tracking-[0.25em] text-white/70 backdrop-blur-sm"
+					class="absolute inset-0 flex items-center justify-center bg-black/60 text-[9px] font-bold uppercase tracking-[0.3em] text-neutral-300 backdrop-blur-[2px]"
 				>
-					Loading Preview
+					LOADING_
 				</div>
 			{/if}
 		</div>
 
-		<div class="flex flex-col space-y-1 px-1">
-		<h3
-			class="text-white text-sm font-medium leading-snug group-hover:text-gray-300 line-clamp-2 transition-colors"
-		>
-			{displayTitle}
-		</h3>
-			<p class="text-neutral-600 text-xs tracking-wider uppercase">
+		<div class="flex flex-col space-y-1.5 px-0.5 pb-0.5">
+			<div class="flex justify-between items-start gap-2">
+				<h3
+					class="text-neutral-300 text-[11px] font-bold uppercase tracking-wide leading-snug group-hover:text-white line-clamp-2 transition-colors break-words"
+				>
+					{displayTitle}
+				</h3>
+			</div>
+			<p
+				class="text-neutral-600 text-[9px] font-bold tracking-[0.2em] uppercase border-t border-neutral-900 pt-1.5 mt-1 group-hover:border-neutral-800 group-hover:text-neutral-500 transition-colors"
+			>
 				{formatDate(video.date_added)}
 			</p>
 		</div>
