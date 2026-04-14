@@ -115,8 +115,8 @@
 </script>
 
 <div
-	class="group relative flex flex-col space-y-2 cursor-pointer p-2 border border-neutral-900 hover:border-neutral-700 bg-black transition-colors duration-300 {selected
-		? 'border-white bg-neutral-900/50'
+	class="mono-panel-hover group relative flex flex-col space-y-2 cursor-pointer rounded-[10px] p-2.5 bg-transparent transition-colors duration-300 {selected
+		? 'mono-panel-soft'
 		: ''}"
 >
 	<a
@@ -129,9 +129,9 @@
 		onclick={handleCardClick}
 	>
 		<div
-			class="w-full aspect-video bg-[#0a0a0a] border border-neutral-800 overflow-hidden relative transition-colors duration-300 {selected
-				? 'border-white'
-				: 'group-hover:border-neutral-500'}"
+			class="w-full aspect-video overflow-hidden rounded-[8px] bg-[#1b1c1f] shadow-[inset_0_1px_0_rgba(255,255,255,0.03)] relative transition-colors duration-300 {selected
+				? 'shadow-[0_0_0_1px_rgba(255,255,255,0.08)]'
+				: 'group-hover:bg-[#212226]'}"
 		>
 			<img
 				src={`/api/video/${video.id}/thumbnail`}
@@ -160,9 +160,7 @@
 			{/if}
 
 			{#if firstVariant}
-				<div
-					class="absolute top-0 left-0 bg-black border-b border-r border-neutral-800 flex items-center"
-				>
+				<div class="mono-chip absolute top-2 left-2 flex items-center rounded-[4px]">
 					{#if hasMultiple}
 						<div class="relative group/resolutions">
 							<span
@@ -170,11 +168,9 @@
 							>
 								{firstVariant.quality}
 							</span>
-							<div
-								class="absolute top-full left-0 hidden group-hover/resolutions:block z-10 border border-neutral-700 bg-black"
-							>
+							<div class="absolute top-full left-0 hidden group-hover/resolutions:block z-10 pt-1">
 								<div
-									class="px-2 py-1 text-[9px] font-bold tracking-widest text-white whitespace-nowrap"
+									class="mono-chip rounded-[4px] px-2 py-1 text-[9px] font-bold tracking-widest text-white whitespace-nowrap"
 								>
 									{displayVariants.map((variant) => variant.quality).join(' / ')}
 								</div>
@@ -193,9 +189,9 @@
 			{#if selectable}
 				<button
 					type="button"
-					class="absolute right-0 top-0 z-10 flex h-6 w-6 items-center justify-center border-b border-l bg-black transition-colors {selected
-						? 'border-white text-black bg-white hover:bg-neutral-200'
-						: 'border-neutral-800 text-neutral-400 hover:text-white hover:border-neutral-600'}"
+					class="absolute right-2 top-2 z-10 flex h-7 w-7 items-center justify-center rounded-[4px] mono-chip transition-colors {selected
+						? 'bg-white text-black hover:bg-neutral-200'
+						: 'text-neutral-400 hover:text-white'}"
 					onclick={handleSelectionButtonClick}
 					aria-label={selected ? `Deselect ${displayTitle}` : `Select ${displayTitle}`}
 				>
@@ -222,7 +218,7 @@
 			{/if}
 
 			<div
-				class="absolute bottom-0 right-0 bg-black border-t border-l border-neutral-800 px-1.5 py-0.5 text-[9px] font-bold tracking-[0.2em] text-neutral-400 group-hover:text-white transition-colors"
+				class="mono-chip absolute bottom-2 right-2 rounded-[4px] px-1.5 py-0.5 text-[9px] font-bold tracking-[0.2em] text-neutral-300 group-hover:text-white transition-colors"
 			>
 				{formatDuration(video.duration)}
 			</div>
@@ -245,7 +241,7 @@
 				</h3>
 			</div>
 			<p
-				class="text-neutral-600 text-[9px] font-bold tracking-[0.2em] uppercase border-t border-neutral-900 pt-1.5 mt-1 group-hover:border-neutral-800 group-hover:text-neutral-500 transition-colors"
+				class="text-neutral-600 text-[9px] font-bold tracking-[0.2em] uppercase pt-1 mt-1 group-hover:text-neutral-500 transition-colors"
 			>
 				{formatDate(video.date_added)}
 			</p>

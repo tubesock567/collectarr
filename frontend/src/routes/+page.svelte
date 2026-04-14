@@ -706,11 +706,11 @@
 <div class="flex flex-col h-full w-full relative">
 	<!-- Top utility bar/search -->
 	<div
-		class="flex-shrink-0 border-b border-neutral-800 bg-[#0a0a0a] px-4 py-2 flex flex-col sm:flex-row items-center justify-between gap-3 sticky top-0 z-20 shadow-sm"
+		class="mono-panel flex-shrink-0 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 sticky top-0 z-20"
 	>
 		<div class="flex items-center gap-4 w-full sm:w-auto flex-1">
 			<label
-				class="flex h-8 w-full sm:max-w-md items-center overflow-hidden border border-neutral-800 bg-black text-neutral-300 transition-all focus-within:border-neutral-600"
+				class="mono-control flex h-10 w-full sm:max-w-md items-center overflow-hidden rounded-[8px] text-neutral-300 transition-all focus-within:bg-[#202124]"
 			>
 				<div class="pl-3 pr-2 text-neutral-500 flex items-center justify-center shrink-0">
 					<svg
@@ -738,7 +738,7 @@
 
 			<div class="hidden sm:flex items-center gap-2">
 				<button
-					class="h-8 px-3 flex items-center justify-center border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-400 hover:text-white bg-black uppercase tracking-widest text-[10px] font-bold"
+					class="mono-control h-8 px-3 flex items-center justify-center uppercase tracking-widest text-[10px] font-bold"
 					aria-label="Refresh library"
 					onclick={() => loadVideos()}
 					disabled={loading}
@@ -762,14 +762,14 @@
 		<div class="flex items-center gap-2 w-full sm:w-auto overflow-x-auto no-scrollbar">
 			<div class="relative flex items-center" bind:this={desktopSortDropdownEl}>
 				<button
-					class="flex items-center justify-center gap-2 h-8 px-3 text-[10px] uppercase tracking-widest font-bold border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-400 hover:text-white bg-black whitespace-nowrap"
+					class="mono-control flex items-center justify-center gap-2 h-8 px-3 text-[10px] uppercase tracking-widest font-bold whitespace-nowrap rounded-[8px]"
 					onclick={() => (showSortDropdown = !showSortDropdown)}
 					aria-label="Sort options"
 				>
 					<span>{getSortLabel()}</span>
 				</button>
 				<button
-					class="ml-1 flex h-8 w-8 items-center justify-center border border-neutral-800 bg-black text-neutral-400 transition-colors hover:border-neutral-600 hover:text-white"
+					class="mono-control ml-1 flex h-8 w-8 items-center justify-center rounded-[8px]"
 					onclick={toggleSortOrder}
 					aria-label="Toggle sort order"
 					title={sortOrder === 'asc' ? 'Ascending' : 'Descending'}
@@ -784,26 +784,26 @@
 				</button>
 				{#if showSortDropdown}
 					<div
-						class="absolute top-full right-0 mt-1 w-36 bg-[#111] border border-neutral-700 shadow-2xl z-30 overflow-hidden text-[10px] uppercase font-bold tracking-widest"
+						class="mono-panel absolute top-full right-0 mt-2 w-36 rounded-[10px] shadow-2xl z-30 overflow-hidden text-[10px] uppercase font-bold tracking-widest"
 					>
 						<button
 							class="w-full px-3 py-2 text-left hover:bg-neutral-800 transition-colors {sortBy ===
 							'dateAdded'
-								? 'text-white bg-neutral-800/50 border-l-2 border-white'
+								? 'text-white bg-[#2b2b2f]'
 								: 'text-neutral-400'}"
 							onclick={() => setSort('dateAdded')}>Date Added</button
 						>
 						<button
 							class="w-full px-3 py-2 text-left hover:bg-neutral-800 transition-colors {sortBy ===
 							'duration'
-								? 'text-white bg-neutral-800/50 border-l-2 border-white'
+								? 'text-white bg-[#2b2b2f]'
 								: 'text-neutral-400'}"
 							onclick={() => setSort('duration')}>Duration</button
 						>
 						<button
 							class="w-full px-3 py-2 text-left hover:bg-neutral-800 transition-colors {sortBy ===
 							'alphabetical'
-								? 'text-white bg-neutral-800/50 border-l-2 border-white'
+								? 'text-white bg-[#2b2b2f]'
 								: 'text-neutral-400'}"
 							onclick={() => setSort('alphabetical')}>Alphabetical</button
 						>
@@ -813,7 +813,7 @@
 
 			<div class="hidden sm:block relative" bind:this={columnDropdownEl}>
 				<button
-					class="flex items-center gap-2 h-8 px-3 text-[10px] uppercase tracking-widest font-bold border border-neutral-800 hover:border-neutral-600 transition-colors text-neutral-400 hover:text-white bg-black whitespace-nowrap"
+					class="mono-control flex items-center gap-2 h-8 px-3 text-[10px] uppercase tracking-widest font-bold whitespace-nowrap rounded-[8px]"
 					onclick={() => (showColumnDropdown = !showColumnDropdown)}
 					aria-label="Column count options"
 				>
@@ -824,13 +824,13 @@
 				</button>
 				{#if showColumnDropdown}
 					<div
-						class="absolute top-full right-0 mt-1 w-32 bg-[#111] border border-neutral-700 shadow-2xl z-30 overflow-hidden text-[10px] uppercase font-bold tracking-widest"
+						class="mono-panel absolute top-full right-0 mt-2 w-32 rounded-[10px] shadow-2xl z-30 overflow-hidden text-[10px] uppercase font-bold tracking-widest"
 					>
 						{#each [2, 3, 4, 6, 8] as count}
 							<button
 								class="w-full px-3 py-2 text-left hover:bg-neutral-800 transition-colors {columnCount ===
 								count
-									? 'text-white bg-neutral-800/50 border-l-2 border-white'
+									? 'text-white bg-[#2b2b2f]'
 									: 'text-neutral-400'}"
 								onclick={() => setColumnCount(count)}>{count} Cols</button
 							>
@@ -840,9 +840,9 @@
 			</div>
 
 			<button
-				class="h-8 px-4 text-[10px] uppercase tracking-widest font-bold border transition-colors whitespace-nowrap {selectionMode
-					? 'border-white bg-white text-black hover:bg-neutral-200'
-					: 'border-neutral-800 bg-black text-neutral-400 hover:text-white hover:border-neutral-600'}"
+				class="h-8 px-4 text-[10px] uppercase tracking-widest font-bold transition-colors whitespace-nowrap rounded-[8px] {selectionMode
+					? 'mono-control-active hover:bg-neutral-200'
+					: 'mono-control'}"
 				onclick={toggleSelectionMode}
 				aria-label={selectionMode ? 'Exit selection mode' : 'Enter selection mode'}
 			>
@@ -853,7 +853,7 @@
 
 	<div class="px-4 sm:px-6 py-6 w-full flex-1">
 		{#if selectionMode && !loading && videos.length > 0}
-			<div class="mb-6 border border-neutral-800 bg-black/70 px-4 py-4">
+			<div class="mono-panel mb-6 rounded-[14px] px-4 py-4">
 				<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">
 					<div>
 						<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Selection</p>
@@ -869,19 +869,19 @@
 					<div class="flex flex-wrap items-center gap-2">
 						{#if selectedCount > 0}
 							<button
-								class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors"
+								class="mono-control h-9 px-3 text-xs uppercase tracking-wider text-white transition-colors rounded-[8px]"
 								onclick={openPlaylistPanel}
 							>
 								Add to Playlist
 							</button>
 							<button
-								class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 bg-neutral-900 text-white hover:border-neutral-400 transition-colors"
+								class="mono-control h-9 px-3 text-xs uppercase tracking-wider text-white transition-colors rounded-[8px]"
 								onclick={openMetadataPanel}
 							>
 								Edit selection
 							</button>
 							<button
-								class="h-9 px-3 text-xs uppercase tracking-wider border border-neutral-600 text-white hover:border-neutral-400 hover:bg-neutral-800 transition-colors"
+								class="mono-control h-9 px-3 text-xs uppercase tracking-wider text-white transition-colors rounded-[8px]"
 								onclick={clearSelection}
 							>
 								Clear
@@ -893,7 +893,7 @@
 		{/if}
 
 		{#if !loading && continueWatching.length > 0}
-			<div class="mb-8 border-b border-neutral-900 pb-8">
+			<div class="mb-8 pb-8">
 				<div class="flex items-center justify-between mb-4">
 					<h2 class="text-[10px] font-bold uppercase tracking-[0.3em] text-neutral-400">
 						Continue Watching
@@ -911,10 +911,10 @@
 					{#each continueWatching as item (item.video_id)}
 						<a
 							href="/player/{item.video_id}"
-							class="group block border border-neutral-900 p-1 hover:border-neutral-700 transition-colors bg-black"
+							class="group block rounded-[10px] p-1.5 mono-panel-soft mono-panel-hover bg-transparent"
 						>
 							<div
-								class="relative aspect-video bg-[#0a0a0a] border border-neutral-800 overflow-hidden"
+								class="relative aspect-video rounded-[8px] bg-[#1b1c1f] overflow-hidden shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]"
 							>
 								{#if item.thumbnail_url && !failedContinueWatchingThumbnails[item.video_id]}
 									<img
@@ -955,7 +955,7 @@
 									{displayMediaTitle(item.title)}
 								</p>
 								<p
-									class="text-[9px] font-bold tracking-[0.2em] text-neutral-600 mt-1 uppercase border-t border-neutral-900 pt-1 group-hover:border-neutral-800 transition-colors"
+									class="text-[9px] font-bold tracking-[0.2em] text-neutral-600 mt-1 uppercase pt-1 transition-colors"
 								>
 									{Math.round(item.progress_pct)}% WATCHED
 								</p>
@@ -973,9 +973,7 @@
 			</div>
 		{:else if error && videos.length === 0}
 			<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-				<div
-					class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md"
-				>
+				<div class="mono-panel rounded-[16px] p-12 flex flex-col items-center text-center max-w-md">
 					<div class="w-16 h-16 mb-4 text-neutral-700">
 						<svg viewBox="0 0 24 24" fill="currentColor">
 							<path
@@ -987,7 +985,7 @@
 					<p class="text-sm text-neutral-600 mb-6">{error}</p>
 					<button
 						onclick={() => window.location.reload()}
-						class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
+						class="mono-control rounded-[8px] px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white transition-colors"
 					>
 						Retry
 					</button>
@@ -995,9 +993,7 @@
 			</div>
 		{:else if videos.length === 0}
 			<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-				<div
-					class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md"
-				>
+				<div class="mono-panel rounded-[16px] p-12 flex flex-col items-center text-center max-w-md">
 					<div class="w-16 h-16 mb-4 text-neutral-700">
 						<svg viewBox="0 0 24 24" fill="currentColor">
 							<path
@@ -1015,16 +1011,14 @@
 					</p>
 					<a
 						href="/settings"
-						class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
+						class="mono-control rounded-[8px] px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white transition-colors"
 						>Go to Settings</a
 					>
 				</div>
 			</div>
 		{:else if filteredVideos.length === 0}
 			<div class="flex flex-col items-center justify-center min-h-[50vh] space-y-4">
-				<div
-					class="border border-neutral-800 bg-neutral-950/50 p-12 flex flex-col items-center text-center max-w-md"
-				>
+				<div class="mono-panel rounded-[16px] p-12 flex flex-col items-center text-center max-w-md">
 					<div class="w-16 h-16 mb-4 text-neutral-700">
 						<svg viewBox="0 0 24 24" fill="currentColor">
 							<path
@@ -1041,7 +1035,7 @@
 							searchQuery = '';
 							currentPage = 1;
 						}}
-						class="border border-neutral-700 px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white hover:border-neutral-500 transition-colors"
+						class="mono-control rounded-[8px] px-4 py-2 text-xs uppercase tracking-widest text-neutral-400 hover:text-white transition-colors"
 					>
 						Clear Search
 					</button>
@@ -1073,7 +1067,7 @@
 			{#if totalPages > 1}
 				<div class="flex justify-center items-center gap-2 mt-8">
 					<button
-						class="flex h-12 w-12 items-center justify-center border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+						class="mono-control flex h-12 w-12 items-center justify-center rounded-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
 						onclick={() => goToPage(currentPage - 1)}
 						disabled={currentPage === 1}
 						aria-label="Previous page"
@@ -1088,10 +1082,10 @@
 						return start + i;
 					}) as pageNum}
 						<button
-							class="flex h-12 w-12 items-center justify-center border text-xs font-mono transition-colors {currentPage ===
+							class="flex h-12 w-12 items-center justify-center text-xs font-mono transition-colors {currentPage ===
 							pageNum
-								? 'bg-neutral-700 text-white border-neutral-600'
-								: 'text-neutral-400 border-neutral-700 hover:border-neutral-500 hover:text-white'}"
+								? 'bg-[#efefef] text-black'
+								: 'mono-control text-neutral-400 hover:text-white'} rounded-[10px]"
 							onclick={() => goToPage(pageNum)}
 							aria-label="Page {pageNum}">{pageNum}</button
 						>
@@ -1103,14 +1097,14 @@
 
 					{#if totalPages > 5 && currentPage < totalPages - 2}
 						<button
-							class="flex h-12 min-w-12 items-center justify-center border border-neutral-700 px-3 text-xs font-mono text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white"
+							class="mono-control flex h-12 min-w-12 items-center justify-center px-3 text-xs font-mono text-neutral-400 rounded-[10px] transition-colors hover:text-white"
 							onclick={() => goToPage(totalPages)}
 							aria-label="Last page">{totalPages}</button
 						>
 					{/if}
 
 					<button
-						class="flex h-12 w-12 items-center justify-center border border-neutral-700 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white disabled:opacity-50 disabled:cursor-not-allowed"
+						class="mono-control flex h-12 w-12 items-center justify-center rounded-[10px] disabled:opacity-50 disabled:cursor-not-allowed"
 						onclick={() => goToPage(currentPage + 1)}
 						disabled={currentPage === totalPages}
 						aria-label="Next page"
@@ -1140,9 +1134,11 @@
 			aria-labelledby="metadata-editor-title"
 			tabindex="-1"
 			onkeydown={handleMetadataDialogKeydown}
-			class="relative z-10 w-full max-w-2xl max-h-[90vh] overflow-hidden border border-neutral-800 bg-black shadow-2xl"
+			class="mono-panel relative z-10 w-full max-w-2xl max-h-[90vh] overflow-hidden rounded-[18px] shadow-2xl"
 		>
-			<div class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5">
+			<div
+				class="flex items-start justify-between gap-4 px-6 py-5 shadow-[inset_0_-1px_0_rgba(255,255,255,0.03)]"
+			>
 				<div>
 					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Metadata Editor</p>
 					<h2 id="metadata-editor-title" class="mt-2 text-lg font-semibold text-white">
@@ -1169,7 +1165,7 @@
 			<div class="overflow-y-auto px-6 py-5 text-sm text-white/80 max-h-[calc(90vh-140px)]">
 				{#if selectedCount === 1}
 					<div class="space-y-6">
-						<div class="grid gap-4 border border-neutral-800 bg-neutral-950/60 p-4 text-sm">
+						<div class="mono-panel-soft grid gap-4 rounded-[12px] p-4 text-sm">
 							<div>
 								<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Selection</p>
 								<p class="mt-2 text-white">
@@ -1201,7 +1197,7 @@
 					</div>
 				{:else}
 					<div class="space-y-6">
-						<div class="border border-neutral-800 bg-neutral-950/60 p-4">
+						<div class="mono-panel-soft rounded-[12px] p-4">
 							<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Bulk editing</p>
 							<p class="mt-2 text-white">
 								Bulk updates are non-destructive: add tags and actors to every selected group, or
@@ -1258,10 +1254,10 @@
 				{/if}
 			</div>
 
-			<div class="border-t border-neutral-800 px-6 py-5">
+			<div class="px-6 py-5 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
 				<div class="flex items-center gap-3">
 					<button
-						class="border border-white bg-white px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-black transition-colors hover:bg-white/85 disabled:border-neutral-700 disabled:bg-neutral-800 disabled:text-neutral-500"
+						class="mono-control-active px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] transition-colors hover:bg-white/85 disabled:bg-neutral-800 disabled:text-neutral-500 rounded-[8px]"
 						onclick={selectedCount === 1 ? saveSingleMetadata : saveBulkMetadata}
 						disabled={savingMetadata || (selectedCount > 1 && !bulkHasChanges)}
 					>
@@ -1274,7 +1270,7 @@
 						{/if}
 					</button>
 					<button
-						class="border border-neutral-700 px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
+						class="mono-control rounded-[8px] px-4 py-2 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:text-white"
 						onclick={() => closeMetadataPanel()}
 					>
 						Cancel
@@ -1303,10 +1299,10 @@
 			aria-labelledby="playlist-editor-title"
 			tabindex="-1"
 			onkeydown={handlePlaylistDialogKeydown}
-			class="relative z-10 w-full max-w-lg overflow-hidden border border-neutral-800 bg-black shadow-2xl flex flex-col max-h-[90vh]"
+			class="mono-panel relative z-10 w-full max-w-lg overflow-hidden rounded-[18px] shadow-2xl flex flex-col max-h-[90vh]"
 		>
 			<div
-				class="flex items-start justify-between gap-4 border-b border-neutral-800 px-6 py-5 shrink-0"
+				class="flex items-start justify-between gap-4 px-6 py-5 shrink-0 shadow-[inset_0_-1px_0_rgba(255,255,255,0.03)]"
 			>
 				<div>
 					<p class="text-[10px] uppercase tracking-[0.3em] text-neutral-500">Playlists</p>
@@ -1330,11 +1326,7 @@
 
 			<div class="px-6 py-5 space-y-6 overflow-y-auto min-h-0 flex-1">
 				<div>
-					<h3
-						class="text-sm uppercase tracking-widest text-neutral-400 mb-3 border-b border-neutral-800 pb-2"
-					>
-						Create New
-					</h3>
+					<h3 class="text-sm uppercase tracking-widest text-neutral-400 mb-3 pb-2">Create New</h3>
 					<form
 						class="flex gap-2"
 						onsubmit={(e) => {
@@ -1346,12 +1338,12 @@
 							type="text"
 							bind:value={newPlaylistName}
 							placeholder="Playlist name"
-							class="h-10 flex-1 bg-neutral-900 border border-neutral-700 px-3 text-white outline-none focus:border-neutral-500 text-sm"
+							class="mono-control h-10 flex-1 rounded-[8px] px-3 text-white outline-none text-sm"
 							disabled={savingPlaylist}
 						/>
 						<button
 							type="submit"
-							class="h-10 px-4 text-xs font-bold uppercase tracking-widest bg-white text-black hover:bg-white/80 transition-colors disabled:opacity-50"
+							class="mono-control-active h-10 px-4 rounded-[8px] text-xs font-bold uppercase tracking-widest hover:bg-white/80 transition-colors disabled:opacity-50"
 							disabled={savingPlaylist || !newPlaylistName.trim()}
 						>
 							Create
@@ -1361,15 +1353,13 @@
 
 				{#if playlists.length > 0}
 					<div>
-						<h3
-							class="text-sm uppercase tracking-widest text-neutral-400 mb-3 border-b border-neutral-800 pb-2"
-						>
+						<h3 class="text-sm uppercase tracking-widest text-neutral-400 mb-3 pb-2">
 							Add to Existing
 						</h3>
 						<div class="flex flex-col gap-2 max-h-60 overflow-y-auto pr-2">
 							{#each playlists as playlist (playlist.id)}
 								<button
-									class="flex items-center justify-between p-3 border border-neutral-800 hover:border-neutral-500 bg-neutral-950/60 hover:bg-neutral-900 transition-colors text-left"
+									class="mono-panel-soft flex items-center justify-between p-3 rounded-[10px] hover:bg-[#26272b] transition-colors text-left"
 									onclick={() => addToPlaylist(playlist.id)}
 									disabled={savingPlaylist}
 								>
@@ -1384,15 +1374,15 @@
 				{/if}
 
 				{#if playlistMessage}
-					<p class="text-sm text-neutral-400 p-3 bg-neutral-900 border border-neutral-800">
+					<p class="mono-panel-soft text-sm text-neutral-400 p-3 rounded-[10px]">
 						{playlistMessage}
 					</p>
 				{/if}
 			</div>
 
-			<div class="border-t border-neutral-800 px-6 py-5 shrink-0">
+			<div class="px-6 py-5 shrink-0 shadow-[inset_0_1px_0_rgba(255,255,255,0.03)]">
 				<button
-					class="w-full h-10 border border-neutral-700 text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
+					class="mono-control w-full h-10 rounded-[8px] text-xs font-bold uppercase tracking-[0.25em] text-neutral-300 transition-colors hover:text-white"
 					onclick={() => closePlaylistPanel()}
 				>
 					Close
