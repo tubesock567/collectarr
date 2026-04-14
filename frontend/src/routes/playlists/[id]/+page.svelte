@@ -80,7 +80,7 @@
 	<title>Collectarr - {playlist?.name || 'Playlist'}</title>
 </svelte:head>
 
-<div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="app-page app-page-content">
 	<div class="mb-6 flex items-start gap-4">
 		<a
 			href="/playlists"

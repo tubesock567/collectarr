@@ -529,7 +529,7 @@
 	<title>Collectarr - Settings</title>
 </svelte:head>
 
-<div class="max-w-3xl mx-auto px-4 sm:px-6 lg:px-8 py-12">
+<div class="app-page app-page-narrow">
 	<h1 class="text-2xl font-bold uppercase tracking-widest mb-8 border-b border-neutral-800 pb-4">
 		Settings
 	</h1>

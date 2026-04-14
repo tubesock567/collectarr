@@ -178,7 +178,7 @@
 	<title>Collectarr - Playlists</title>
 </svelte:head>
 
-<div class="mx-auto flex h-full w-full max-w-[1600px] flex-col px-4 py-6 sm:px-6">
+<div class="app-page app-page-wide flex h-full flex-col">
 	<div class="mono-panel mb-6 rounded-[18px]">
 		<div
 			class="flex flex-col gap-4 px-4 py-4 sm:flex-row sm:items-center sm:justify-between sm:px-6 shadow-[inset_0_-1px_0_rgba(255,255,255,0.03)]"

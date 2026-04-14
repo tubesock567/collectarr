@@ -971,7 +971,7 @@
 	<title>Collectarr - Torrents</title>
 </svelte:head>
 
-<div class="mx-auto max-w-7xl px-4 py-12 sm:px-6 lg:px-8">
+<div class="app-page app-page-content">
 	<div class="mb-8 border-b border-neutral-800 pb-4">
 		<h1 class="text-2xl font-bold uppercase tracking-widest">Torrents</h1>
 		<p class="mt-2 max-w-3xl text-sm text-neutral-500">
