@@ -111,7 +111,7 @@
 		<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-6">
 			{#each playlists as playlist (playlist.id)}
 				<div
-					class="border border-neutral-800 bg-black p-4 flex flex-col gap-4 hover:border-neutral-600 transition-colors"
+					class="border border-neutral-800 bg-black p-4 flex flex-col gap-4 hover:border-neutral-600 transition-colors w-full"
 				>
 					<a href="/playlists/{playlist.id}" class="block">
 						<div
