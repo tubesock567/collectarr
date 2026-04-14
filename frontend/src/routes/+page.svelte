@@ -703,7 +703,7 @@
 	<title>Collectarr - Library</title>
 </svelte:head>
 
-<div class="flex flex-col h-full w-full relative">
+<div class="app-page app-page-wide relative flex h-full min-h-0 w-full flex-col">
 	<!-- Top utility bar/search -->
 	<div
 		class="mono-panel flex-shrink-0 px-4 py-3 flex flex-col sm:flex-row items-center justify-between gap-3 sticky top-0 z-20"
@@ -851,7 +851,7 @@
 		</div>
 	</div>
 
-	<div class="px-4 sm:px-6 py-6 w-full flex-1">
+	<div class="flex-1">
 		{#if selectionMode && !loading && videos.length > 0}
 			<div class="mono-panel mb-6 rounded-[14px] px-4 py-4">
 				<div class="flex flex-col gap-3 lg:flex-row lg:items-center lg:justify-between">

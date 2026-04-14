@@ -62,9 +62,10 @@
 	<title>Collectarr - Change Password</title>
 </svelte:head>
 
-<div class="min-h-screen flex items-center justify-center px-4">
+
+<div class="app-page app-page-narrow flex flex-1 items-center justify-center">
 	<form
-		class="w-full max-w-md border border-neutral-800 bg-neutral-950 p-8 space-y-6"
+		class="mono-panel w-full max-w-md space-y-6 rounded-[18px] border border-neutral-800 p-8"
 		onsubmit={submitChangePassword}
 	>
 		<div class="space-y-2">
