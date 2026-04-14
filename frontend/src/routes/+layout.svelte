@@ -179,14 +179,12 @@
 	</main>
 {:else}
 	<div
-		class="flex h-screen w-full bg-[#111] p-1 sm:p-3 overflow-hidden font-mono tracking-tight text-neutral-300"
+		class="flex h-screen w-full bg-[#17171a] p-2 sm:p-4 overflow-hidden font-mono tracking-tight text-neutral-300"
 	>
-		<div
-			class="flex flex-1 overflow-hidden bg-black border border-neutral-800 rounded-sm shadow-2xl relative w-full"
-		>
+		<div class="mono-shell flex flex-1 overflow-hidden rounded-[18px] relative w-full">
 			<!-- Mobile Top Nav -->
 			<div
-				class="sm:hidden absolute top-0 left-0 right-0 z-30 border-b border-neutral-800 bg-black text-white flex items-center justify-between px-4 py-3"
+				class="mono-panel sm:hidden absolute top-0 left-0 right-0 z-30 text-white flex items-center justify-between px-4 py-3"
 			>
 				<a
 					href="/"
@@ -196,7 +194,7 @@
 				</a>
 				<button
 					bind:this={mobileNavTriggerEl}
-					class="h-9 px-3 border border-neutral-700 bg-neutral-900 text-[10px] font-semibold uppercase tracking-[0.3em] text-neutral-300 transition-colors hover:border-neutral-500 hover:text-white"
+					class="mono-control h-9 px-3 text-[10px] font-semibold uppercase tracking-[0.3em]"
 					aria-label={showMobileNav ? 'Close navigation panel' : 'Open navigation panel'}
 					aria-expanded={showMobileNav}
 					aria-controls="mobile-navigation-panel"
@@ -215,16 +213,14 @@
 
 				<div
 					id="mobile-navigation-panel"
-					class="fixed inset-x-0 top-0 z-50 border-b border-neutral-800 bg-black text-white shadow-2xl transition-transform duration-300 ease-out sm:hidden translate-y-0"
+					class="mono-shell fixed inset-x-0 top-0 z-50 text-white shadow-2xl transition-transform duration-300 ease-out sm:hidden translate-y-0"
 					bind:this={mobileNavPanelEl}
 					role="dialog"
 					aria-modal="true"
 					aria-label="Mobile navigation"
 					tabindex="-1"
 				>
-					<div
-						class="mx-auto flex max-w-7xl items-center justify-between gap-3 border-b border-neutral-800 px-4 py-3"
-					>
+					<div class="mx-auto flex max-w-7xl items-center justify-between gap-3 px-4 py-3">
 						<p class="text-[10px] font-semibold uppercase tracking-[0.3em] text-neutral-500">
 							Navigation
 						</p>
@@ -239,10 +235,10 @@
 					<div class="mx-auto flex max-w-7xl flex-col px-4 py-4">
 						<a
 							href="/"
-							class="flex items-center justify-between border border-neutral-800 px-4 py-4 text-xs font-semibold uppercase tracking-[0.3em] transition-colors {$page
+							class="mono-panel-soft flex items-center justify-between px-4 py-4 text-xs font-semibold uppercase tracking-[0.3em] transition-colors {$page
 								.url.pathname === '/'
-								? 'bg-neutral-900 text-white'
-								: 'text-neutral-400 hover:border-neutral-600 hover:text-white'}"
+								? 'bg-[#2a2a2d] text-white'
+								: 'text-neutral-400 hover:bg-[#232326] hover:text-white'}"
 						>
 							<span>Library</span>
 							{#if $page.url.pathname === '/'}
@@ -251,11 +247,11 @@
 						</a>
 						<a
 							href="/playlists"
-							class="mt-3 flex items-center justify-between border border-neutral-800 px-4 py-4 text-xs font-semibold uppercase tracking-[0.3em] transition-colors {$page.url.pathname.startsWith(
+							class="mono-panel-soft mt-3 flex items-center justify-between px-4 py-4 text-xs font-semibold uppercase tracking-[0.3em] transition-colors {$page.url.pathname.startsWith(
 								'/playlists'
 							)
-								? 'bg-neutral-900 text-white'
-								: 'text-neutral-400 hover:border-neutral-600 hover:text-white'}"
+								? 'bg-[#2a2a2d] text-white'
+								: 'text-neutral-400 hover:bg-[#232326] hover:text-white'}"
 						>
 							<span>Playlists</span>
 							{#if $page.url.pathname.startsWith('/playlists')}
@@ -264,10 +260,10 @@
 						</a>
 						<a
 							href="/torrents"
-							class="mt-3 flex items-center justify-between border border-neutral-800 px-4 py-4 text-xs font-semibold uppercase tracking-[0.3em] transition-colors {$page
+							class="mono-panel-soft mt-3 flex items-center justify-between px-4 py-4 text-xs font-semibold uppercase tracking-[0.3em] transition-colors {$page
 								.url.pathname === '/torrents'
-								? 'bg-neutral-900 text-white'
-								: 'text-neutral-400 hover:border-neutral-600 hover:text-white'}"
+								? 'bg-[#2a2a2d] text-white'
+								: 'text-neutral-400 hover:bg-[#232326] hover:text-white'}"
 						>
 							<span>Torrents</span>
 							{#if $page.url.pathname === '/torrents'}
@@ -276,10 +272,10 @@
 						</a>
 						<a
 							href="/settings"
-							class="mt-3 flex items-center justify-between border border-neutral-800 px-4 py-4 text-xs font-semibold uppercase tracking-[0.3em] transition-colors {$page
+							class="mono-panel-soft mt-3 flex items-center justify-between px-4 py-4 text-xs font-semibold uppercase tracking-[0.3em] transition-colors {$page
 								.url.pathname === '/settings'
-								? 'bg-neutral-900 text-white'
-								: 'text-neutral-400 hover:border-neutral-600 hover:text-white'}"
+								? 'bg-[#2a2a2d] text-white'
+								: 'text-neutral-400 hover:bg-[#232326] hover:text-white'}"
 						>
 							<span>Settings</span>
 							{#if $page.url.pathname === '/settings'}
@@ -287,9 +283,9 @@
 							{/if}
 						</a>
 
-						<div class="mt-4 flex gap-2 border-t border-neutral-800 pt-4">
+						<div class="mt-4 flex gap-2 pt-4">
 							<button
-								class="flex-1 h-10 flex items-center justify-center border border-neutral-700 bg-neutral-900 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white"
+								class="mono-control flex-1 h-10 flex items-center justify-center"
 								aria-label={$theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
 								onclick={() => theme.toggleTheme($theme)}
 							>
@@ -308,7 +304,7 @@
 								{/if}
 							</button>
 							<button
-								class="flex-1 h-10 flex items-center justify-center border border-neutral-700 bg-neutral-900 text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white"
+								class="mono-control flex-1 h-10 flex items-center justify-center"
 								aria-label={$preferences.incognito
 									? 'Disable incognito mode'
 									: 'Enable incognito mode'}
@@ -332,7 +328,7 @@
 
 						{#if $auth.isAuthenticated}
 							<div
-								class="mt-4 flex items-center justify-between border-t border-neutral-800 pt-4 text-[10px] font-semibold uppercase tracking-[0.3em] text-neutral-500"
+								class="mt-4 flex items-center justify-between pt-4 text-[10px] font-semibold uppercase tracking-[0.3em] text-neutral-500"
 							>
 								<span>{$auth.username}</span>
 								<button
@@ -351,9 +347,11 @@
 			<aside
 				class="hidden sm:flex {sidebarCollapsed
 					? 'w-16'
-					: 'w-64'} flex-col border-r border-neutral-800 bg-black flex-shrink-0 z-20 transition-all duration-200 shadow-xl relative"
+					: 'w-64'} flex-col bg-[#161618] flex-shrink-0 z-20 transition-all duration-200 relative"
 			>
-				<div class="p-4 flex items-center justify-between border-b border-neutral-900 bg-[#0a0a0a]">
+				<div
+					class="p-4 flex items-center justify-between bg-[#17181b] shadow-[inset_0_-1px_0_rgba(255,255,255,0.03)]"
+				>
 					{#if !sidebarCollapsed}
 						<a
 							href="/"
@@ -363,7 +361,7 @@
 						</a>
 					{/if}
 					<button
-						class="h-6 w-6 flex items-center justify-center border border-neutral-800 bg-black text-neutral-400 transition-colors hover:border-neutral-500 hover:text-white"
+						class="mono-control h-6 w-6 flex items-center justify-center"
 						aria-label={sidebarCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}
 						onclick={() => (sidebarCollapsed = !sidebarCollapsed)}
 					>
@@ -392,8 +390,8 @@
 							? 'justify-center'
 							: 'gap-3 px-3'} py-2 text-[11px] font-bold tracking-[0.15em] uppercase transition-colors {$page
 							.url.pathname === '/'
-							? 'text-white border-l-2 border-white bg-neutral-900/30'
-							: 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/20 border-l-2 border-transparent'}"
+							? 'text-white bg-[#2b2b2f]'
+							: 'text-neutral-500 hover:text-neutral-300 hover:bg-[#202124]'}"
 						title="Library"
 					>
 						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -410,8 +408,8 @@
 							: 'gap-3 px-3'} py-2 text-[11px] font-bold tracking-[0.15em] uppercase transition-colors {$page.url.pathname.startsWith(
 							'/playlists'
 						)
-							? 'text-white border-l-2 border-white bg-neutral-900/30'
-							: 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/20 border-l-2 border-transparent'}"
+							? 'text-white bg-[#2b2b2f]'
+							: 'text-neutral-500 hover:text-neutral-300 hover:bg-[#202124]'}"
 						title="Playlists"
 					>
 						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -425,8 +423,8 @@
 							? 'justify-center'
 							: 'gap-3 px-3'} py-2 text-[11px] font-bold tracking-[0.15em] uppercase transition-colors {$page
 							.url.pathname === '/torrents'
-							? 'text-white border-l-2 border-white bg-neutral-900/30'
-							: 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/20 border-l-2 border-transparent'}"
+							? 'text-white bg-[#2b2b2f]'
+							: 'text-neutral-500 hover:text-neutral-300 hover:bg-[#202124]'}"
 						title="Torrents"
 					>
 						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -442,8 +440,8 @@
 							? 'justify-center'
 							: 'gap-3 px-3'} py-2 text-[11px] font-bold tracking-[0.15em] uppercase transition-colors {$page
 							.url.pathname === '/settings'
-							? 'text-white border-l-2 border-white bg-neutral-900/30'
-							: 'text-neutral-500 hover:text-neutral-300 hover:bg-neutral-900/20 border-l-2 border-transparent'}"
+							? 'text-white bg-[#2b2b2f]'
+							: 'text-neutral-500 hover:text-neutral-300 hover:bg-[#202124]'}"
 						title="Settings"
 					>
 						<svg class="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -455,10 +453,10 @@
 					</a>
 				</div>
 
-				<div class="p-2 border-t border-neutral-800 flex flex-col gap-3">
+				<div class="p-2 flex flex-col gap-3">
 					<div class="flex items-center {sidebarCollapsed ? 'justify-center' : 'gap-2'}">
 						<button
-							class="h-8 w-8 flex items-center justify-center border border-neutral-800 bg-neutral-900 text-neutral-400 transition-colors hover:border-neutral-600 hover:text-white"
+							class="mono-control h-8 w-8 flex items-center justify-center"
 							aria-label={$theme === 'light' ? 'Switch to dark mode' : 'Switch to light mode'}
 							onclick={() => theme.toggleTheme($theme)}
 						>
@@ -478,7 +476,7 @@
 						</button>
 						{#if !sidebarCollapsed}
 							<button
-								class="h-8 w-8 flex items-center justify-center border border-neutral-800 bg-neutral-900 text-neutral-400 transition-colors hover:border-neutral-600 hover:text-white"
+								class="mono-control h-8 w-8 flex items-center justify-center"
 								aria-label={$preferences.incognito
 									? 'Disable incognito mode'
 									: 'Enable incognito mode'}
@@ -517,7 +515,7 @@
 			<!-- Main Content Area -->
 			<main
 				data-shell-scroll="true"
-				class="flex-1 flex flex-col relative z-10 overflow-y-auto bg-[#0a0a0a] sm:border-l sm:border-t sm:border-neutral-800 pt-14 sm:pt-0"
+				class="flex-1 flex flex-col relative z-10 overflow-y-auto bg-[#141416] pt-14 sm:pt-0"
 			>
 				<Toast />
 				<div class="flex-1 w-full h-full flex flex-col">
